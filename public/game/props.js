@@ -801,13 +801,77 @@ function cullBand(meshes, band) {
   installNatureCull();
 }
 
+/* ---------------------------------------------------- hidden by the land
+ *  "Do not draw the things that are behind something" is the right
+ *  instinct, and it is worth being exact about how much of it is available
+ *  here, because the general version is not.
+ *
+ *  There are no hardware occlusion queries in WebGL2 through three's
+ *  renderer, and a software occlusion rasteriser - rendering a depth buffer
+ *  on the CPU to test boxes against - would cost more on this machine than
+ *  the draw calls it saved. It is also aimed at the wrong world: an open
+ *  meadow is nearly the worst case for occlusion culling, because almost
+ *  everything has sky or open ground behind it rather than a wall.
+ *
+ *  What this map DOES have is one enormous occluder that never moves: the
+ *  ground itself. The cinder cone, the cliffs, and every ridge between here
+ *  and the far treeline hide whatever is behind them, and testing against a
+ *  heightfield is cheap in a way that testing against arbitrary geometry is
+ *  not - march the segment from the eye to the thing and ask the terrain
+ *  how high it is at a few points along the way.
+ *
+ *  So: props do not occlude each other (a tree is mostly holes, and a wood
+ *  is not a wall), but the LAND occludes props, and that is the case that
+ *  actually empties the far field when you stand behind the volcano.
+ *
+ *  Three things keep this from eating what it saves:
+ *
+ *  - It runs on BUCKETS, not props. Everything here is already grouped into
+ *    spatial cells for the distance cull, and one segment march rejects a
+ *    whole cell.
+ *  - It runs on a quarter of the buckets per frame. Whether a hill is in the
+ *    way changes over metres of walking, not over 16ms, so a result three
+ *    frames stale is the same result.
+ *  - It only tests what is already in band and already far enough away to
+ *    be worth the question. Near buckets are rarely occluded and are exactly
+ *    where a false positive would be most visible.
+ *
+ *  The test is deliberately conservative - it asks whether the TOP of the
+ *  bucket's sphere is under the terrain, with a metre of clearance on top of
+ *  that. A bucket only disappears when the land is unambiguously in front of
+ *  all of it. Getting this wrong in the other direction would mean props
+ *  winking out in open ground, which is a far worse bug than drawing a few
+ *  hidden trees. */
+var HORIZON_STEPS = 10;
+var HORIZON_MIN = 140;        /* below this, do not bother asking */
+var HORIZON_LIFT = 1.0;       /* metres the land must beat the ray by */
+var _horizPhase = 0;
+
+function terrainOccludes(ex, ey, ez, tx, ty, tz) {
+  var dx = tx - ex, dy = ty - ey, dz = tz - ez;
+  for (var i = 1; i < HORIZON_STEPS; i++) {
+    var t = i / HORIZON_STEPS;
+    if (groundY(ex + dx * t, ez + dz * t) > ey + dy * t + HORIZON_LIFT) { return true; }
+  }
+  return false;
+}
+
 function natureCull(cam) {
   var p = cam.position;
+  _horizPhase = (_horizPhase + 1) & 3;
   for (var i = 0; i < NAT_CULL.length; i++) {
     var b = NAT_CULL[i];
     var dx = p.x - b.cx, dy = p.y - b.cy, dz = p.z - b.cz;
     var d = Math.sqrt(dx * dx + dy * dy + dz * dz);
-    b.m.visible = (d + b.r >= b.d0) && (d - b.r <= b.d1);
+    var inBand = (d + b.r >= b.d0) && (d - b.r <= b.d1);
+    if (inBand && d > HORIZON_MIN) {
+      if ((i & 3) === _horizPhase) {
+        b.hid = terrainOccludes(p.x, p.y, p.z, b.cx, b.cy + b.r, b.cz);
+      }
+    } else {
+      b.hid = false;          /* near again: forget whatever it last said */
+    }
+    b.m.visible = inBand && !b.hid;
   }
 }
 
@@ -1641,4 +1705,158 @@ function useModelTrees() {
   });
 }
 
-export { useModelTrees, setPropLODScale, dumpLODReport, SCATTERED, BRIDGE, FORESTS, blobGeo, bridgeY, broadleafGeo, buildBridge, buildFlowers, buildGardenAccents, buildReeds, buildRocks, buildSunflowers, buildTrees, bushGeo, emitInstances, emitNature, flowerGeo, forestDensity, groundY, natureReady, natureScatter, pineGeo, placeProps, reedGeo, rockGeo, sakuraGeo, scatter, sunflowerGeometry, swayMaterial };
+/* ======================================================================== *
+ *  LANDMARKS - and where there is room for them
+ *
+ *  Every scatter in this file is a DENSITY FIELD, and a density field
+ *  leaves holes: the flats south of the brook, the far side of the ridge,
+ *  the ground the forest thins out of on its way to the shore. Those holes
+ *  are exactly where a landmark wants to go, for two separate reasons that
+ *  happen to agree.
+ *
+ *  The first is that it looks right. A statue with four hundred trees
+ *  around it reads as undergrowth; the same statue with clear ground
+ *  around it reads as something someone PUT there, which is the entire
+ *  point of a landmark.
+ *
+ *  The second is that it renders better. Cost on this machine is per
+ *  SCREENFUL, not per world - a frame looking into the thickest part of
+ *  the wood is already the worst frame there is, and adding a 2,400
+ *  triangle dead tree to it makes the worst frame worse while leaving the
+ *  empty half of the map costing nothing. Putting the expensive props in
+ *  the gaps spreads the load across views instead of stacking it into the
+ *  ones that are already heavy. It is load-balancing that happens to be
+ *  the same decision as good composition.
+ * ======================================================================== */
+
+/* Coarse enough to be a map of "roughly where the wood is" rather than a
+   record of individual trees - a landmark does not need to thread a gap
+   between two trunks, it needs to find a clearing. */
+var OCC_N = 40;
+var _occ = null, _occFull = 1;
+
+/* Filled from every placement already in SCATTERED, weighted by instance
+   scale so a hole in the canopy counts for more than a hole in the
+   flowers. Safe to build lazily on first use: placeProps() is synchronous
+   even for the modelled props, whose MESHES arrive later - so by the time
+   anything asks, every scatter has already recorded where it went. */
+function buildOccupancy() {
+  var g = new Float32Array(OCC_N * OCC_N), step = WORLD / OCC_N, i;
+  for (var seed in SCATTERED) {
+    var mats = SCATTERED[seed].mats;
+    if (!mats) { continue; }
+    for (i = 0; i < mats.length; i++) {
+      var e = mats[i].elements;
+      var sy = Math.sqrt(e[4] * e[4] + e[5] * e[5] + e[6] * e[6]);
+      var gx = Math.floor((e[12] + HALF) / step), gz = Math.floor((e[14] + HALF) / step);
+      if (gx < 0 || gz < 0 || gx >= OCC_N || gz >= OCC_N) { continue; }
+      g[gz * OCC_N + gx] += sy;
+    }
+  }
+  /* One box blur. Without it a landmark can be dropped into a single empty
+     cell with a wall of trees on all four sides, which satisfies the metric
+     and defeats the purpose. */
+  var b = new Float32Array(OCC_N * OCC_N);
+  for (var z = 0; z < OCC_N; z++) {
+    for (var x = 0; x < OCC_N; x++) {
+      var s = 0, n = 0;
+      for (var dz = -1; dz <= 1; dz++) {
+        for (var dx = -1; dx <= 1; dx++) {
+          var qx = x + dx, qz = z + dz;
+          if (qx < 0 || qz < 0 || qx >= OCC_N || qz >= OCC_N) { continue; }
+          s += g[qz * OCC_N + qx]; n++;
+        }
+      }
+      b[z * OCC_N + x] = s / n;
+    }
+  }
+  /* "Full" is the 85th percentile of the cells that have anything in them,
+     not a constant. Tuning the forest density would otherwise silently
+     re-tune what counts as a clearing. */
+  var nz = [];
+  for (i = 0; i < b.length; i++) { if (b[i] > 0) { nz.push(b[i]); } }
+  nz.sort(function (p, q) { return p - q; });
+  _occFull = nz.length ? nz[Math.floor(nz.length * 0.85)] : 1;
+  if (!(_occFull > 0)) { _occFull = 1; }
+  return b;
+}
+
+/* 1 where the map is empty, 0 where it is as crowded as the thickest wood. */
+function emptiness(x, z) {
+  if (!_occ) { _occ = buildOccupancy(); }
+  var step = WORLD / OCC_N;
+  var gx = Math.floor((x + HALF) / step), gz = Math.floor((z + HALF) / step);
+  if (gx < 0 || gz < 0 || gx >= OCC_N || gz >= OCC_N) { return 0; }
+  return 1 - Math.min(1, _occ[gz * OCC_N + gx] / _occFull);
+}
+
+/* The landmarks themselves. Small counts on purpose - the whole value of
+   these is that meeting one is an event, and eleven fox statues is not an
+   event. They ride the ordinary nature path, which means they are
+   instanced, they get an impostor, and they pick their own draw distance
+   off the ladder in models.js with nothing assigned by hand. */
+function buildLandmarks() {
+  /* Open, gently sloping, dry ground with room around it. */
+  var okOpen = function (x, z, si) {
+    if (si.water || si.h < 3.5 || si.h > 150 || si.slope > 0.30) { return false; }
+    if (si.riverD < 38) { return false; }
+    return emptiness(x, z) > 0.60;
+  };
+  /* Same, but it wants to be SEEN from the walk rather than stumbled on. */
+  var okOpenNearPath = function (x, z, si) {
+    if (!okOpen(x, z, si)) { return false; }
+    var d = Math.min(pathInfo(WALKPATH, x, z).d, pathInfo(BEACHPATH, x, z).d);
+    return d > 14 && d < 150;
+  };
+  /* And the opposite: as far from the walk as the map allows. */
+  var okRemote = function (x, z, si) {
+    if (si.water || si.h < 4 || si.h > 130 || si.slope > 0.26) { return false; }
+    if (si.riverD < 38) { return false; }
+    if (Math.min(pathInfo(WALKPATH, x, z).d, pathInfo(BEACHPATH, x, z).d) < 210) { return false; }
+    return emptiness(x, z) > 0.72;
+  };
+
+  natureScatter({
+    seed: 61, props: ['statue_fox'], sway: 0, bury: 0.02,
+    tries: 14000, max: 3, range: SCAT_R,
+    prob: function (x, z) { return emptiness(x, z); },
+    accept: okOpenNearPath, scale: function (r) { return 1.5 + r() * 0.5; },
+    tilt: 0.02, sink: -0.05, shadow: true
+  });
+  natureScatter({
+    seed: 62, props: ['pillar'], sway: 0, bury: 0.04,
+    tries: 14000, max: 9, range: SCAT_R,
+    prob: function (x, z) { return emptiness(x, z); },
+    accept: okOpen, scale: function (r) { return 1.1 + r() * 0.8; },
+    tilt: 0.10, sink: -0.10, shadow: true
+  });
+  /* One crypt. It is the only thing in the meadow that is unambiguously
+     built by someone, and finding it should mean having walked a long way
+     from the path to do it. */
+  natureScatter({
+    seed: 63, props: ['crypt'], sway: 0, bury: 0.03,
+    tries: 20000, max: 1, range: SCAT_R,
+    prob: function (x, z) { return emptiness(x, z); },
+    accept: okRemote, scale: function (r) { return 0.85 + r() * 0.25; },
+    tilt: 0.02, sink: -0.06, shadow: true
+  });
+  /* Dead trees read as a blight spreading out of the bare ground, so they
+     are allowed on the cinder and they prefer the high, thin end of the
+     map where the living wood has already given up. */
+  natureScatter({
+    seed: 64, props: ['dead_tree'], sway: 0.05, bury: 0.03, onBare: 'allow',
+    tries: 16000, max: 14, range: SCAT_R,
+    prob: function (x, z) {
+      return emptiness(x, z) * (0.35 + 0.65 * smoothstep(40, 130, terrainHeight(x, z)));
+    },
+    accept: function (x, z, si) {
+      if (si.water || si.h < 6 || si.slope > 0.55) { return false; }
+      if (si.riverD < 30) { return false; }
+      return emptiness(x, z) > 0.5;
+    },
+    scale: function (r) { return 0.75 + r() * 0.5; },
+    tilt: 0.06, sink: -0.2, shadow: true
+  });
+}
+
+export { useModelTrees, setPropLODScale, dumpLODReport, buildLandmarks, emptiness, SCATTERED, BRIDGE, FORESTS, blobGeo, bridgeY, broadleafGeo, buildBridge, buildFlowers, buildGardenAccents, buildReeds, buildRocks, buildSunflowers, buildTrees, bushGeo, emitInstances, emitNature, flowerGeo, forestDensity, groundY, natureReady, natureScatter, pineGeo, placeProps, reedGeo, rockGeo, sakuraGeo, scatter, sunflowerGeometry, swayMaterial };

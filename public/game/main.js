@@ -10,7 +10,8 @@ import { buildGrassGrid, fillGrassTile, grassMat, grassQueue, updateGrass } from
 import { buildMist, buildRainbow } from './particles.js';
 import { setTouchAPI, setPlaying, isTouchDevice, WALK, setReady, setStarted, P, bindInput, lockPointer, playerStart, playing, ready, started, updatePlayer } from './player.js';
 import { applyPostFX, getLODScale, initQuality, updatePerfHUD, autoQuality, fsPass, onResize, rtScene, setupPost } from './post.js';
-import { useModelTrees, setPropLODScale, buildBridge, buildFlowers, buildGardenAccents, buildReeds, buildRocks, buildSunflowers, buildTrees, dumpLODReport, natureReady } from './props.js';
+import { useModelTrees, setPropLODScale, buildBridge, buildFlowers, buildGardenAccents, buildLandmarks, buildReeds, buildRocks, buildSunflowers, buildTrees, dumpLODReport, natureReady } from './props.js';
+import { buildActors, updateActors } from './actors.js';
 import { buildClouds, buildSky, skyMesh } from './sky.js';
 import { buildVolcano } from './volcano.js';
 import { buildCliffWall, genTerrain } from './terrain.js';
@@ -49,8 +50,16 @@ function* boot() {
   buildRocks();
   buildBridge();
   buildGardenAccents();
+  /* AFTER every scatter above, and that ordering is the whole design:
+     buildLandmarks() places into the gaps the others left, and it can only
+     see those gaps once they exist. placeProps() is synchronous even for
+     the modelled props - only their meshes arrive late - so by this line
+     every position in the world has been decided. */
+  yield ['Raising the old stones', 0.94];
+  buildLandmarks();
   yield ['Waking the butterflies', 0.95];
   buildCreatures();
+  buildActors();
   buildMist(fall);
   buildRainbow();
   yield ['Growing the grass', 0.96];
@@ -263,6 +272,7 @@ function animate() {
   updateAudio(dt, P.pos.x, P.pos.y, P.pos.z);
   updateGrass(P.pos.x, P.pos.z, 1);
   updateCreatures(tAcc, P.pos.x, P.pos.z);
+  updateActors(dt, P.pos.x, P.pos.z);
   if (fadeIn > 0) { fadeIn = Math.max(0, fadeIn - dt * 0.75); }
   else { autoQuality(dt); }
   renderFrame(dt);

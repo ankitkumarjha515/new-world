@@ -130,6 +130,12 @@ function loadModel(url) {
       loader.load(url, function (gltf) {
         var root = gltf.scene || (gltf.scenes && gltf.scenes[0]);
         if (!root) { reject(new Error('glTF had no scene')); return; }
+        /* GLTFLoader hands the clips back on the gltf object, not on the
+           scene, and this function only ever returns the scene. Every
+           nature prop has none so nothing noticed; the actors in actors.js
+           are animated, so carry them across here rather than widening
+           what this returns for sixteen callers that do not care. */
+        if (gltf.animations && gltf.animations.length) { root.animations = gltf.animations; }
         resolve(root);
       }, undefined, reject);
     }), 45000, 'model fetch timed out: ' + url);
