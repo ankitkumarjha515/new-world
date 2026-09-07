@@ -1,0 +1,30 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "whispering-meadow",
+  "compatibility_date": "2025-09-01",
+  "main": "src/index.js",
+
+  // The game itself is a static asset. Asset requests are served BEFORE the
+  // Worker runs and are free and unlimited, so hosting the game still costs
+  // nothing - only the /ws websocket touches the metered quota.
+  "assets": {
+    "directory": "./public",
+    "not_found_handling": "single-page-application"
+  },
+
+  // One Durable Object == one meadow that players share.
+  "durable_objects": {
+    "bindings": [
+      { "name": "MEADOW", "class_name": "Meadow" }
+    ]
+  },
+
+  // SQLite-backed classes are the ones available on the free plan.
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["Meadow"] }
+  ],
+
+  "observability": {
+    "enabled": true
+  }
+}

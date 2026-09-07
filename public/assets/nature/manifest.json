@@ -1,0 +1,122 @@
+[
+ {
+  "name": "tree_a",
+  "height": 9.425,
+  "base": -0.243,
+  "radius": 2.352
+ },
+ {
+  "name": "tree_b",
+  "height": 9.438,
+  "base": -0.243,
+  "radius": 2.108
+ },
+ {
+  "name": "tree_c",
+  "height": 7.006,
+  "base": -0.243,
+  "radius": 2.164
+ },
+ {
+  "name": "tree_d",
+  "height": 7.265,
+  "base": -0.243,
+  "radius": 2.523
+ },
+ {
+  "name": "pine_a",
+  "height": 10.236,
+  "base": -0.235,
+  "radius": 3.337
+ },
+ {
+  "name": "pine_b",
+  "height": 7.376,
+  "base": -0.235,
+  "radius": 3.302
+ },
+ {
+  "name": "pine_c",
+  "height": 8.724,
+  "base": -0.235,
+  "radius": 3.779
+ },
+ {
+  "name": "blossom_a",
+  "height": 16.725,
+  "base": -0.201,
+  "radius": 11.677
+ },
+ {
+  "name": "blossom_b",
+  "height": 18.949,
+  "base": -0.201,
+  "radius": 7.069
+ },
+ {
+  "name": "bush_a",
+  "height": 1.582,
+  "base": -0.235,
+  "radius": 1.06
+ },
+ {
+  "name": "fern_a",
+  "height": 2.689,
+  "base": -0.247,
+  "radius": 4.639
+ },
+ {
+  "name": "rock_a",
+  "height": 1.899,
+  "base": -0.051,
+  "radius": 1.876
+ },
+ {
+  "name": "rock_b",
+  "height": 2.26,
+  "base": -0.271,
+  "radius": 1.856
+ },
+ {
+  "name": "rock_c",
+  "height": 2.316,
+  "base": -0.316,
+  "radius": 2.613
+ },
+ {
+  "name": "flower_a",
+  "height": 2.068,
+  "base": -0.018,
+  "radius": 0.529
+ },
+ {
+  "name": "flower_b",
+  "height": 2.419,
+  "base": -0.03,
+  "radius": 0.658
+ },
+ {
+  "name": "statue_fox",
+  "height": 3.752,
+  "base": 0,
+  "radius": 0.949
+ },
+ {
+  "name": "pillar",
+  "height": 4.4,
+  "base": 0,
+  "radius": 0.707
+ },
+ {
+  "name": "crypt",
+  "height": 8,
+  "base": 0,
+  "radius": 5
+ },
+ {
+  "name": "dead_tree",
+  "height": 12.771,
+  "base": -0.336,
+  "radius": 4.837
+ }
+]
