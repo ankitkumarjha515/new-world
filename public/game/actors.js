@@ -221,44 +221,74 @@ function buildTractor(root) {
   /* A closed loop of waypoints on ground the tractor can actually work.
      Laid out as a ring so the loop cannot cross itself, then each point
      nudged until it lands somewhere walkable - a ring that ignored the
-     terrain would drive it straight through the river. */
-  var ring = [], N = 9, R = 240 + rng() * 90;
-  var cx = 0, cz = 0;
-  var seed = pickDestination(rng, 0, 0, 380);
-  if (seed) { cx = seed.x; cz = seed.z; }
-  for (var i = 0; i < N; i++) {
-    var a = i / N * TAU;
-    var hit = null;
-    for (var k = 0; k < 26 && !hit; k++) {
-      var rr = R * (1 - k * 0.03);
-      var x = cx + Math.cos(a) * rr, z = cz + Math.sin(a) * rr;
-      if (walkable(x, z)) { hit = { x: x, z: z }; }
-    }
-    if (hit) { ring.push(hit); }
-  }
+     terrain would drive it straight through the river.
 
-  /* A walkable pair of endpoints says nothing about the ground BETWEEN them,
-     and the tractor drives the straight line. Neighbours on a ring this wide
-     start ~190m apart, and a point that could not be seated is dropped
-     outright, which doubles the gap - so the unchecked chord is long enough
-     to cross the river or clip a ridge, which is the failure the ring layout
-     is supposed to rule out. Sample along each leg and keep only the legs
-     that hold. */
+     Seating the CORNERS is not enough, because the tractor drives the
+     straight line between them. Ring neighbours start ~190m apart and a
+     corner that could not be seated is dropped outright, doubling that, so
+     the unchecked chord is long enough to cross the brook or clip a ridge -
+     which is the exact failure the ring is here to rule out. Measured on the
+     shipping seed: only two of nine legs were actually clear.
+
+     What a leg has to satisfy is NOT walkable(). That is the test the
+     scatters use to decide where a tree may take root, and its 34m river
+     buffer and 0.34 slope ceiling describe good planting soil, not
+     driveable ground. A tractor may pass within a few metres of the water
+     and up a steeper bank than a tree would grow on; it just may not drive
+     THROUGH the river or up the cinder cone. */
+  function drivable(x, z) {
+    var si = siteInfo(x, z);
+    return !si.water && si.h > 3 && si.h < 150 && si.slope < 0.55 && si.riverD > 12;
+  }
   function legClear(p, q) {
     var lx = q.x - p.x, lz = q.z - p.z;
     var steps = Math.max(2, Math.ceil(Math.sqrt(lx * lx + lz * lz) / 12));
     for (var s = 1; s < steps; s++) {
       var t = s / steps;
-      if (!walkable(p.x + lx * t, p.z + lz * t)) { return false; }
+      if (!drivable(p.x + lx * t, p.z + lz * t)) { return false; }
     }
     return true;
   }
-  var path = [];
-  for (i = 0; i < ring.length; i++) {
-    if (!path.length || legClear(path[path.length - 1], ring[i])) { path.push(ring[i]); }
+  function ringAt(cx, cz, R, N) {
+    var out = [];
+    for (var i = 0; i < N; i++) {
+      var a = i / N * TAU, hit = null;
+      for (var k = 0; k < 26 && !hit; k++) {
+        var rr = R * (1 - k * 0.03);
+        var x = cx + Math.cos(a) * rr, z = cz + Math.sin(a) * rr;
+        if (walkable(x, z)) { hit = { x: x, z: z }; }
+      }
+      if (hit) { out.push(hit); }
+    }
+    return out;
   }
-  /* The loop closes, so the leg home has to hold too. */
-  while (path.length >= 3 && !legClear(path[path.length - 1], path[0])) { path.pop(); }
+  /* Drop the corners whose approach does not hold. Whatever survives is a
+     loop every leg of which has been checked - a shorter round, never a
+     wrong one. */
+  function pruned(ring) {
+    var out = [];
+    for (var i = 0; i < ring.length; i++) {
+      if (!out.length || legClear(out[out.length - 1], ring[i])) { out.push(ring[i]); }
+    }
+    /* the loop closes, so the leg home has to hold too */
+    while (out.length >= 3 && !legClear(out[out.length - 1], out[0])) { out.pop(); }
+    return out;
+  }
+
+  /* Try whole rings and keep the first that holds all the way round. Failing
+     that, the best pruned one. Every draw here comes off this function's own
+     mulberry32(913), so hunting costs nothing anyone else can observe. */
+  var N = 9, path = null, best = [];
+  for (var attempt = 0; attempt < 60 && !path; attempt++) {
+    var c = pickDestination(rng, 0, 0, 380);
+    if (!c) { continue; }
+    var ring = ringAt(c.x, c.z, 200 + rng() * 130, N);
+    if (ring.length < 3) { continue; }
+    var keep = pruned(ring);
+    if (keep.length === ring.length && ring.length >= 5) { path = keep; }
+    else if (keep.length > best.length) { best = keep; }
+  }
+  if (!path) { path = best; }
   if (path.length < 3) { return; }     /* nowhere to drive - skip it rather
                                           than drop a tractor in the river */
 
