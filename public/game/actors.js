@@ -164,6 +164,13 @@ function updateWolf(dt, px, pz) {
     if (wolf.wait <= 0) {
       wolf.dest = pickDestination(wolf.rng, p.x, p.z, 140);
       if (wolf.dest && wolf.walk) { wolf.walk.reset().fadeIn(0.3).play(); if (wolf.idle) { wolf.idle.fadeOut(0.3); } }
+      /* Forty rejection samples in a 140m disc can legitimately all miss -
+         the wolf may have ended its last leg against the river, the cinder
+         cone or a steep bank, where walkable() turns down everything within
+         reach. Re-arm the timer when that happens. Without this the wait
+         stays expired AND dest stays null, so neither branch is ever entered
+         again and the wolf stands in Idle for the rest of the session. */
+      if (!wolf.dest) { wolf.wait = 1 + wolf.rng() * 2; }
     }
   } else if (wolf.dest) {
     var dx = wolf.dest.x - p.x, dz = wolf.dest.z - p.z;
@@ -196,7 +203,14 @@ function buildTractor(root) {
   root.scale.setScalar(1.9);           /* Kenney's kit is ~2m to a car; this
                                           world's trees are 7-14m, so a
                                           life-size tractor has to come up */
-  toonify(root);
+
+  /* Yaw about the world, pitch about the axle line. On three's default 'XYZ'
+     the X rotation is composed LAST and therefore applies in world space, so
+     a tractor driving east or west would roll onto its side rather than tip
+     nose-up - the exact artefact the fore/aft ground sampling in
+     updateTractor() exists to produce. Every other yaw+tilt in this project
+     already sets this (props.js, creatures.js). */
+  root.rotation.order = 'YXZ';
 
   /* The five named nodes are the whole reason this model was chosen. */
   var wheels = [];
@@ -208,7 +222,7 @@ function buildTractor(root) {
      Laid out as a ring so the loop cannot cross itself, then each point
      nudged until it lands somewhere walkable - a ring that ignored the
      terrain would drive it straight through the river. */
-  var path = [], N = 9, R = 240 + rng() * 90;
+  var ring = [], N = 9, R = 240 + rng() * 90;
   var cx = 0, cz = 0;
   var seed = pickDestination(rng, 0, 0, 380);
   if (seed) { cx = seed.x; cz = seed.z; }
@@ -220,10 +234,39 @@ function buildTractor(root) {
       var x = cx + Math.cos(a) * rr, z = cz + Math.sin(a) * rr;
       if (walkable(x, z)) { hit = { x: x, z: z }; }
     }
-    if (hit) { path.push(hit); }
+    if (hit) { ring.push(hit); }
   }
+
+  /* A walkable pair of endpoints says nothing about the ground BETWEEN them,
+     and the tractor drives the straight line. Neighbours on a ring this wide
+     start ~190m apart, and a point that could not be seated is dropped
+     outright, which doubles the gap - so the unchecked chord is long enough
+     to cross the river or clip a ridge, which is the failure the ring layout
+     is supposed to rule out. Sample along each leg and keep only the legs
+     that hold. */
+  function legClear(p, q) {
+    var lx = q.x - p.x, lz = q.z - p.z;
+    var steps = Math.max(2, Math.ceil(Math.sqrt(lx * lx + lz * lz) / 12));
+    for (var s = 1; s < steps; s++) {
+      var t = s / steps;
+      if (!walkable(p.x + lx * t, p.z + lz * t)) { return false; }
+    }
+    return true;
+  }
+  var path = [];
+  for (i = 0; i < ring.length; i++) {
+    if (!path.length || legClear(path[path.length - 1], ring[i])) { path.push(ring[i]); }
+  }
+  /* The loop closes, so the leg home has to hold too. */
+  while (path.length >= 3 && !legClear(path[path.length - 1], path[0])) { path.pop(); }
   if (path.length < 3) { return; }     /* nowhere to drive - skip it rather
                                           than drop a tractor in the river */
+
+  /* Only now is the model certainly going to be used. toonify() allocates a
+     material per source material and nothing disposes them on the bail
+     above, which on the 8 GB machine this file targets is a leak for the
+     rest of the session. */
+  toonify(root);
 
   root.position.set(path[0].x, groundY(path[0].x, path[0].z), path[0].z);
   scene.add(root);
@@ -247,7 +290,7 @@ function updateTractor(dt, px, pz) {
   r.visible = vis;
   if (!vis) { return; }
 
-  var a = path[tractor.leg], b = path[(tractor.leg + 1) % path.length];
+  var b = path[(tractor.leg + 1) % path.length];
   var dx = b.x - p.x, dz = b.z - p.z;
   var d = Math.sqrt(dx * dx + dz * dz);
   if (d < 2.5) {
