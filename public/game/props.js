@@ -231,15 +231,17 @@ function buildSunflowers() {
 
   /* The sunflowers are procedural, so they need no network and appear with
      the terrain rather than a beat later. */
-  SCATTERED[777] = { mats: sunM, meshes: [] };
+  SCATTERED[777] = { mats: sunM, meshes: [], bulk: NOMINAL_H_DEFAULT };
   if (sunM.length) {
+    var sunGeo = sunflowerGeometry();
+    SCATTERED[777].bulk = geoHeight(sunGeo);
     SCATTERED[777].meshes =
-      cullBand(emitInstances(sunflowerGeometry(), swayMaterial(0.030, SMALL_SCATTER.sunflower),
+      cullBand(emitInstances(sunGeo, swayMaterial(0.030, SMALL_SCATTER.sunflower),
         sunM, sunC, 150, false), SMALL_SCATTER.sunflower);
   }
 
   if (!natM.length) { return; }
-  SCATTERED[778] = { mats: natM, meshes: [] };
+  SCATTERED[778] = { mats: natM, meshes: [], bulk: nominalHeight(['flower_a', 'flower_b']) };
   natureReady.then(function (lib) {
     if (lib && emitNature(lib, {
       seed: 778, props: ['flower_a', 'flower_b'],
@@ -594,6 +596,48 @@ function groundY(x, z) {
    spots without re-running the placement logic */
 var SCATTERED = {};
 
+/* ------------------------------------------------- how big a prop actually is
+   buildOccupancy() needs the PHYSICAL height of a prop, and a placement
+   matrix does not carry it. The Y column of one is a per-instance multiplier
+   hovering around 1 - roughly 0.85 to 1.55 for a 9.4m tree and 0.85 to 1.75
+   for a 2.1m wildflower - so weighting a cell by that alone says a clump of
+   flowers is heavier than the wood next to it.
+
+   Hand-written geometry can simply be measured. Modelled props cannot: their
+   heights live in assets/nature/manifest.json, which arrives over the network,
+   and buildLandmarks() runs at boot before it lands. So the table below
+   MIRRORS that file. Add a prop there, add it here - a name that is missing
+   falls back to the default and is merely approximate, never wrong enough to
+   move a landmark somewhere silly. */
+var NOMINAL_H_DEFAULT = 4;
+var NOMINAL_H = {
+  tree_a: 9.4, tree_b: 9.4, tree_c: 7.0, tree_d: 7.3,
+  pine_a: 10.2, pine_b: 7.4, pine_c: 8.7,
+  blossom_a: 16.7, blossom_b: 18.9,
+  bush_a: 1.6, fern_a: 2.7,
+  rock_a: 1.9, rock_b: 2.3, rock_c: 2.3,
+  flower_a: 2.1, flower_b: 2.4,
+  statue_fox: 3.8, pillar: 4.4, crypt: 8.0, dead_tree: 12.8
+};
+
+/* The tallest prop the scatter can emit. A scatter mixing tree_a with tree_b
+   is a wood whichever one a given instance turned out to be. */
+function nominalHeight(names) {
+  if (!names || !names.length) { return NOMINAL_H_DEFAULT; }
+  var h = 0;
+  for (var i = 0; i < names.length; i++) {
+    h = Math.max(h, NOMINAL_H[names[i]] || NOMINAL_H_DEFAULT);
+  }
+  return h;
+}
+
+function geoHeight(geo) {
+  if (!geo) { return NOMINAL_H_DEFAULT; }
+  if (!geo.boundingBox) { geo.computeBoundingBox(); }
+  var bb = geo.boundingBox;
+  return bb ? Math.max(0.05, bb.max.y - bb.min.y) : NOMINAL_H_DEFAULT;
+}
+
 /* ---------------------------------------------------------------- placing
    The placement half of scatter(), split out so the model path and the
    procedural path put things in exactly the same spots. Every number comes
@@ -665,7 +709,7 @@ function scatter(opts) {
     /* no billboard to hand over to, so this band simply ends the prop */
     cullBand(meshes, opts.band);
   }
-  SCATTERED[opts.seed] = { mats: placed.mats, meshes: meshes };
+  SCATTERED[opts.seed] = { mats: placed.mats, meshes: meshes, bulk: geoHeight(opts.geo) };
   return meshes;
 }
 
@@ -1181,7 +1225,7 @@ function emitNature(lib, opts, placed) {
 function natureScatter(opts) {
   var placed = placeProps(opts);
   if (!placed) { return null; }
-  SCATTERED[opts.seed] = { mats: placed.mats, meshes: [] };
+  SCATTERED[opts.seed] = { mats: placed.mats, meshes: [], bulk: nominalHeight(opts.props) };
   natureReady.then(function (lib) {
     if (lib && emitNature(lib, opts, placed)) { return; }
     if (!opts.fallback) { return; }
@@ -1735,22 +1779,28 @@ function useModelTrees() {
 var OCC_N = 40;
 var _occ = null, _occFull = 1;
 
-/* Filled from every placement already in SCATTERED, weighted by instance
-   scale so a hole in the canopy counts for more than a hole in the
-   flowers. Safe to build lazily on first use: placeProps() is synchronous
-   even for the modelled props, whose MESHES arrive later - so by the time
-   anything asks, every scatter has already recorded where it went. */
+/* Filled from every placement already in SCATTERED, weighted by how much of
+   the view each prop actually takes up, so a hole in the canopy counts for
+   more than a hole in the flowers. That weight is the prop's real height
+   (see NOMINAL_H) times the instance's own scale multiplier - the multiplier
+   alone is near enough the same number for a tree and a wildflower, which
+   made 1000 flowers in 170 tight clumps read as denser than woodland.
+
+   Safe to build lazily on first use: placeProps() is synchronous even for the
+   modelled props, whose MESHES arrive later - so by the time anything asks,
+   every scatter has already recorded where it went. */
 function buildOccupancy() {
   var g = new Float32Array(OCC_N * OCC_N), step = WORLD / OCC_N, i;
   for (var seed in SCATTERED) {
     var mats = SCATTERED[seed].mats;
     if (!mats) { continue; }
+    var bulk = SCATTERED[seed].bulk || NOMINAL_H_DEFAULT;
     for (i = 0; i < mats.length; i++) {
       var e = mats[i].elements;
       var sy = Math.sqrt(e[4] * e[4] + e[5] * e[5] + e[6] * e[6]);
       var gx = Math.floor((e[12] + HALF) / step), gz = Math.floor((e[14] + HALF) / step);
       if (gx < 0 || gz < 0 || gx >= OCC_N || gz >= OCC_N) { continue; }
-      g[gz * OCC_N + gx] += sy;
+      g[gz * OCC_N + gx] += sy * bulk;
     }
   }
   /* One box blur. Without it a landmark can be dropped into a single empty
@@ -1796,10 +1846,44 @@ function emptiness(x, z) {
    instanced, they get an impostor, and they pick their own draw distance
    off the ladder in models.js with nothing assigned by hand. */
 function buildLandmarks() {
+  /* All four scatters below share one objective - "the most empty ground on
+     the map" - so left to themselves they walk to the same clearings, and a
+     pillar ends up a few metres from the fox statue. Which is the "eleven fox
+     statues is not an event" failure this section opens by warning about,
+     arriving by a different route.
+
+     The occupancy grid cannot break the tie. Rebuilding it between scatters
+     sounds like the fix and is not: one statue adds well under 1% to a cell a
+     stand of trees fills, so `emptiness` does not measurably move and every
+     scatter after the first still sees the same winners. Distance is the only
+     thing that actually separates them - and separation IS the feature here,
+     because meeting one of these is supposed to be an event. */
+  var placedMarks = [];
+  var GAP = 80;
+  var apart = function (x, z) {
+    for (var i = 0; i < placedMarks.length; i++) {
+      var dx = x - placedMarks[i].x, dz = z - placedMarks[i].z;
+      if (dx * dx + dz * dz < GAP * GAP) { return false; }
+    }
+    return true;
+  };
+  /* Landmarks only have to clear the ones placed BEFORE them, so recording
+     happens between scatters, not during one. Fourteen dead trees reading as
+     a blight want to cluster with each other; they just should not cluster
+     onto the crypt. */
+  var remember = function (placed) {
+    if (!placed || !placed.mats) { return; }
+    for (var i = 0; i < placed.mats.length; i++) {
+      var e = placed.mats[i].elements;
+      placedMarks.push({ x: e[12], z: e[14] });
+    }
+  };
+
   /* Open, gently sloping, dry ground with room around it. */
   var okOpen = function (x, z, si) {
     if (si.water || si.h < 3.5 || si.h > 150 || si.slope > 0.30) { return false; }
     if (si.riverD < 38) { return false; }
+    if (!apart(x, z)) { return false; }
     return emptiness(x, z) > 0.60;
   };
   /* Same, but it wants to be SEEN from the walk rather than stumbled on. */
@@ -1813,33 +1897,34 @@ function buildLandmarks() {
     if (si.water || si.h < 4 || si.h > 130 || si.slope > 0.26) { return false; }
     if (si.riverD < 38) { return false; }
     if (Math.min(pathInfo(WALKPATH, x, z).d, pathInfo(BEACHPATH, x, z).d) < 210) { return false; }
+    if (!apart(x, z)) { return false; }
     return emptiness(x, z) > 0.72;
   };
 
-  natureScatter({
+  remember(natureScatter({
     seed: 61, props: ['statue_fox'], sway: 0, bury: 0.02,
     tries: 14000, max: 3, range: SCAT_R,
     prob: function (x, z) { return emptiness(x, z); },
     accept: okOpenNearPath, scale: function (r) { return 1.5 + r() * 0.5; },
     tilt: 0.02, sink: -0.05, shadow: true
-  });
-  natureScatter({
+  }));
+  remember(natureScatter({
     seed: 62, props: ['pillar'], sway: 0, bury: 0.04,
     tries: 14000, max: 9, range: SCAT_R,
     prob: function (x, z) { return emptiness(x, z); },
     accept: okOpen, scale: function (r) { return 1.1 + r() * 0.8; },
     tilt: 0.10, sink: -0.10, shadow: true
-  });
+  }));
   /* One crypt. It is the only thing in the meadow that is unambiguously
      built by someone, and finding it should mean having walked a long way
      from the path to do it. */
-  natureScatter({
+  remember(natureScatter({
     seed: 63, props: ['crypt'], sway: 0, bury: 0.03,
     tries: 20000, max: 1, range: SCAT_R,
     prob: function (x, z) { return emptiness(x, z); },
     accept: okRemote, scale: function (r) { return 0.85 + r() * 0.25; },
     tilt: 0.02, sink: -0.06, shadow: true
-  });
+  }));
   /* Dead trees read as a blight spreading out of the bare ground, so they
      are allowed on the cinder and they prefer the high, thin end of the
      map where the living wood has already given up. */
@@ -1852,6 +1937,7 @@ function buildLandmarks() {
     accept: function (x, z, si) {
       if (si.water || si.h < 6 || si.slope > 0.55) { return false; }
       if (si.riverD < 30) { return false; }
+      if (!apart(x, z)) { return false; }
       return emptiness(x, z) > 0.5;
     },
     scale: function (r) { return 0.75 + r() * 0.5; },
