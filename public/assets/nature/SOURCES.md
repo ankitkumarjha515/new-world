@@ -1,20 +1,44 @@
 # Nature assets
 
-Every model and texture under this directory derives from the **Stylized Nature
+Most models and textures under this directory derive from the **Stylized Nature
 MegaKit** by **Quaternius**, released into the public domain under **CC0 1.0**.
+Four landmark props come from two other CC0 authors — see the table below.
 
 - **Author**  Quaternius — https://quaternius.com
 - **Licence** CC0 1.0 Universal (public domain dedication) — see LICENSE.txt
-- **Mirror**  https://poly.pizza  (per-asset pages listed in `tools/build.mjs`)
+- **Mirror**  https://poly.pizza  (per-asset pages listed in `tools/nature-build/build.mjs`)
+
+## The landmarks
+
+Added later, and not part of the MegaKit. They go through the same build for the
+same reasons, and they are placed by `buildLandmarks()` in `props.js` into the gaps
+the scatters leave rather than by a density field of their own.
+
+| Prop | What | Author | Licence | Source |
+|---|---|---|---|---|
+| `statue_fox` | Stone fox statue, 2,150 tris | Quaternius | CC0 1.0 | [poly.pizza/m/abxyXID5EA](https://poly.pizza/m/abxyXID5EA) |
+| `pillar` | Ruined pillar, 94 tris | Kay Lousberg (KayKit) | CC0 1.0 | [poly.pizza/m/1nt8n3rVKU](https://poly.pizza/m/1nt8n3rVKU) |
+| `crypt` | Stone crypt, 952 tris | Kay Lousberg (KayKit) | CC0 1.0 | [poly.pizza/m/iV5x01FYAl](https://poly.pizza/m/iV5x01FYAl) |
+| `dead_tree` | Gnarled dead tree, 5,702 tris | Quaternius | CC0 1.0 | [poly.pizza/m/n8FhMgMldD](https://poly.pizza/m/n8FhMgMldD) |
+
+`pillar` and `crypt` share one texture atlas (`halloween.png`), which is the
+arrangement the build below exists to produce — they simply arrived that way.
+`statue_fox` has no UVs at all, so it carries no texture and takes its colour from
+vertex colours the build paints on (`TINT` in the build script).
+
+The dead tree is the case that justifies this pipeline twice over. Its source GLB
+is 2.5 MB, of which 2.3 MB is two PNGs — and 1.33 MB of *that* is a normal map,
+which this game cannot display at all. Through the build it comes out at 276 KB of
+geometry plus a 69 KB shared bark texture.
 
 CC0 imposes no attribution requirement. This file exists anyway, because
 knowing where a file came from is worth more than the licence obliges.
 
 ## These are not the originals
 
-`tools/build.mjs` rewrites the source GLBs before they ship. Run it with:
+`tools/nature-build/build.mjs` rewrites the source GLBs before they ship. Run it with:
 
-    node public/assets/nature/tools/build.mjs
+    node tools/nature-build/build.mjs
 
 It re-downloads the originals into `tools/.cache/` (~28 MB, deliberately not
 committed and deleted after a build - it is a download cache, not a source) and
@@ -46,7 +70,7 @@ scatter code can seat a model on the ground and space it without loading it.
 
 | Path | What |
 |---|---|
-| `models/*.glb` | 16 props: 4 broadleaf, 3 pine, 2 twisted/blossom, bush, fern, 3 rocks, 2 flowers |
-| `textures/*.png` | 7 shared base-colour maps, re-attached by material name in `models.js` |
+| `models/*.glb` | 20 props: 4 broadleaf, 3 pine, 2 twisted/blossom, bush, fern, 3 rocks, 2 flowers, and 4 landmarks |
+| `textures/*.png` | 9 shared base-colour maps, re-attached by material name in `models.js` |
 | `manifest.json` | per-prop height / base / radius |
 | `tools/` | build-time only, never loaded by the game |
