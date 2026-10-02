@@ -46,3 +46,4 @@ Free-tier budget (Durable Objects): 100,000 requests/day with a 20:1 discount on
 incoming WebSocket messages, and outgoing messages are free. At 8-10 Hz per
 player that is roughly 50-60 player-hours/day.
 # new-world
+# new-world
