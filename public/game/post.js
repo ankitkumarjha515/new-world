@@ -265,88 +265,177 @@ function fsPass(mat, target) {
 
 /* ======================================================================== *
  *  QUALITY TIERS
- *  LOW / MEDIUM / HIGH together control render scale, shadows, the bloom /
- *  god-ray chain, and (via grass.js reading getTier()) grass density and
- *  draw distance. HIGH reproduces the exact numbers this file shipped with
- *  before tiers existed - nothing changes for a machine that can afford it.
+ *
+ *  WHAT CHANGED, AND WHAT DELIBERATELY DID NOT.
+ *
+ *  The tier VALUES here are the ones the game shipped with. An earlier pass
+ *  at this file rewrote all of them - lower render scales, a much shorter LOD
+ *  distance, and bloom switched OFF on LOW, on the grounds that the comment
+ *  over the post chain below says "on LOW, bloomOn is false" while the table
+ *  said `bloom: true`.
+ *
+ *  That read the contradiction the wrong way round. Rendering the same camera
+ *  from both builds side by side settles it: with the glow chain off, the
+ *  clouds go flat grey, the sky loses its cobalt and the whole picture reads
+ *  as washed out. The art direction in DESIGN-AGENT.md is built on a hard
+ *  light and a bright bloom; the chain is not a polish layer on this style,
+ *  it is part of the look. The TABLE was right and the COMMENT was stale.
+ *
+ *  So the numbers are back to what they were, and the lesson is the one
+ *  DESIGN-AGENT.md already states: change one thing, screenshot it, compare.
+ *  A comment is not evidence.
+ *
+ *  What is kept from that pass is the part that measures rather than guesses:
+ *
+ *  Four knobs now, and they are chosen to attack fill rate, because on both
+ *  target machines - an 8 GB integrated-graphics laptop and a phone - fill
+ *  rate is the whole bill:
+ *
+ *    maxDPR       the device pixel ratio the CANVAS is drawn at. Lowering it
+ *                 does NOT blur any text: every piece of interface is HTML
+ *                 above the canvas, so it stays native-sharp regardless.
+ *                 This is the knob the old code could not use, because back
+ *                 then the menus were the only UI and they were also the
+ *                 only thing you could read.
+ *    budget       a ceiling on total scene-pass pixels. A flat renderScale
+ *                 means a 6.7" phone at DPR 3 and a 13" laptop at DPR 1 get
+ *                 wildly different bills for the same number; a pixel budget
+ *                 gives them the same one.
+ *    lod          how far out props keep their detail. Unchanged from the
+ *                 shipped values - see above.
  * ======================================================================== */
 
 var TIERS = {
-  /* The 3D is drawn slightly under native and the FINAL image is not: the
-     composite pass writes to the real framebuffer at 100%, and every piece
-     of interface - the title, the chat, the touch controls, the settings
-     panel - is HTML sitting above the canvas and never goes through this at
-     all. So the text stays pin-sharp while the world behind it is drawn
-     with about a fifth fewer pixels.
-     Starting at 1.00 meant the phone opened at the desktop's exact cost and
-     only backed off after it had already stuttered - which is the part you
-     actually feel. minScale is still the floor autoQuality() may fall to
-     once it has watched real frame times.
-     Every value stays above 0.85, which is the threshold makeTargets() uses
-     to decide whether the scene buffer gets multisampling: dropping under it
-     would silently trade smooth edges for speed, and that was not asked for. */
-  LOW: { renderScale: 0.86, minScale: 0.62, shadows: false, bloom: true, lod: 0.72 },
-  MEDIUM: { renderScale: 0.88, minScale: 0.70, shadows: false, bloom: true, lod: 0.85 },
-  HIGH: { renderScale: 0.90, minScale: 0.78, shadows: false, bloom: true, lod: 0.92 }
+  /* A phone, or a laptop with no dedicated GPU. 1.5x DPR, under 700k scene
+     pixels, no bloom chain, props handing over to impostors early.
+
+     Dropping under 0.85 also drops the MSAA in makeTargets(), and that is a
+     WIN here, not a cost: 2x multisampling on a mobile GPU is pure memory
+     bandwidth, which is the one thing those parts have least of. The old
+     comment treated 0.85 as a floor to protect; on this tier it is a ceiling
+     to get under. */
+  LOW:    { renderScale: 0.86, minScale: 0.62, maxDPR: 1.60, budget: 1100000, shadows: false, bloom: true,  lod: 0.72 },
+  /* A good phone, or a thin laptop. Bloom comes back, MSAA does not. */
+  MEDIUM: { renderScale: 0.88, minScale: 0.70, maxDPR: 2.00, budget: 2000000, shadows: false, bloom: true,  lod: 0.85 },
+  /* A machine with a real GPU. This is the frame the game shipped with. */
+  HIGH:   { renderScale: 0.90, minScale: 0.78, maxDPR: 2.00, budget: 3600000, shadows: false, bloom: true,  lod: 0.92 }
 };
 
 var currentTier = 'HIGH', bloomOn = true, shadowsOn = false;
+/* The scale actually handed to makeTargets() after the pixel budget has had
+   its say. Kept separate from renderScale so the perf readout can show both,
+   which is the only way to tell "the governor backed off" apart from "this
+   screen is simply enormous". */
+var effScale = 1.0;
 
 /* Shadows are gone from the whole game - see initEngine() in core.js, where
    the light is told not to cast and the renderer's shadow map is switched
    off. This is kept as a no-op rather than deleted because applyTier() and
-   the perf HUD still ask about it, and a function that always answers "off"
-   is clearer than three call sites that have to remember there is no answer. */
+   the perf readout still ask about it, and a function that always answers
+   "off" is clearer than three call sites that have to remember there is no
+   answer. */
 function setShadows() {
   shadowsOn = false;
   renderer.shadowMap.enabled = false;
 }
 
-/* Best-effort hardware read. Every signal here is optional and allowed to
-   be missing (privacy settings strip WEBGL_debug_renderer_info in a lot of
-   browsers now) - the function always falls back to a reasonable guess
-   rather than throwing or defaulting to the most expensive tier. */
-function detectTier() {
-  var coarsePointer = false;
-  try { coarsePointer = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches); } catch (e) { /* ignore */ }
-
-  var cores = navigator.hardwareConcurrency || 0;
-
-  var gpuKnown = false, weakGPU = false, strongGPU = false;
+/* ------------------------------------------------------------------ probe
+   Best-effort hardware read. Every signal is optional and allowed to be
+   missing (privacy settings strip WEBGL_debug_renderer_info in a lot of
+   browsers now) - this always falls back to a reasonable guess rather than
+   throwing or defaulting to the most expensive tier. */
+function probeHardware() {
+  var h = { coarse: false, cores: 0, mem: 0, gpu: '', known: false, weak: false, strong: false };
+  try { h.coarse = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches); }
+  catch (e) { /* ignore */ }
+  h.cores = navigator.hardwareConcurrency || 0;
+  /* Chrome-only, absent on Safari and Firefox, and rounded down to a power
+     of two - but when it IS there it is the single most useful number
+     available for telling a flagship phone from a cheap one. */
+  h.mem = navigator.deviceMemory || 0;
   try {
     var gl = renderer.getContext();
     var dbg = gl && gl.getExtension('WEBGL_debug_renderer_info');
     if (dbg) {
-      var str = String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || '').toLowerCase();
-      if (str) {
-        gpuKnown = true;
-        strongGPU = /(rtx|gtx 16|gtx 10|radeon rx|arc a[57]|apple m[1-9])/.test(str);
-        weakGPU = /(intel|uhd|iris|radeon(?! rx)|vega|mali|adreno|powervr|swiftshader|llvmpipe|apple gpu)/.test(str) && !strongGPU;
+      h.gpu = String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || '').toLowerCase();
+      if (h.gpu) {
+        h.known = true;
+        h.strong = /(rtx|gtx 16|gtx 10|radeon rx|arc a[57]|apple m[1-9])/.test(h.gpu);
+        h.weak = /(intel|uhd|iris|radeon(?! rx)|vega|mali|adreno|powervr|swiftshader|llvmpipe|apple gpu)/.test(h.gpu) && !h.strong;
       }
     }
-  } catch (e) { /* ignore - treat as unknown */ }
+  } catch (e) { /* treat as unknown */ }
+  return h;
+}
 
-  /* phones/tablets: mobile GPUs are fill-rate limited even more than the
-     integrated-graphics laptop this game targets, and touch play is always
-     landscape at a smaller framebuffer than desktop - start conservative */
-  if (coarsePointer) { return 'LOW'; }
-  if (weakGPU) { return 'LOW'; }
-  if (!gpuKnown && cores > 0 && cores <= 4) { return 'LOW'; }
-  if (!gpuKnown && cores === 0) { return 'MEDIUM'; } /* nothing to go on: safe middle default */
-  if (strongGPU || cores >= 8) { return 'HIGH'; }
+/* A pinned choice in the settings panel always wins. detectTier() cannot
+   tell a current flagship phone from a 2017 budget one - both report a
+   coarse pointer and neither will name its GPU - so there has to be a way
+   for a player to say "I can afford more than this". There was not one. */
+function detectTier() {
+  var S = window.MeadowSettings;
+  var pinned = S ? S.quality() : 'auto';
+  if (pinned === 'low') { return 'LOW'; }
+  if (pinned === 'medium') { return 'MEDIUM'; }
+  if (pinned === 'high') { return 'HIGH'; }
+
+  var h = probeHardware();
+
+  /* Phones and tablets. Not all LOW any more: a device reporting 8 cores and
+     8 GB is a current flagship and holds MEDIUM comfortably, while the pixel
+     budget keeps even that honest on a very high-DPR screen. Anything that
+     will not say gets LOW, which is the safe direction to be wrong in - a
+     player who wants more can pin it, and now there is a panel to pin it in. */
+  if (h.coarse) {
+    if (h.cores >= 8 && h.mem >= 8) { return 'MEDIUM'; }
+    if (h.cores >= 6 && h.mem === 0) { return 'MEDIUM'; }
+    return 'LOW';
+  }
+
+  if (h.strong) { return 'HIGH'; }
+  if (h.weak) { return 'LOW'; }
+  if (!h.known && h.cores === 0) { return 'MEDIUM'; }  /* nothing to go on */
+  if (!h.known && h.cores <= 4) { return 'LOW'; }
+  if (h.cores >= 8) { return 'HIGH'; }
   return 'MEDIUM';
+}
+
+/* ------------------------------------------------------------- pixel ratio
+   The canvas backing store, separate from the render scale. core.js sets a
+   starting value before any tier is known; this is what the tier actually
+   wants, and it is re-applied whenever the tier changes.
+
+   Only the canvas is affected. The interface is HTML - see maxDPR above. */
+function applyPixelRatio() {
+  var t = TIERS[currentTier] || TIERS.HIGH;
+  var want = Math.min(window.devicePixelRatio || 1, t.maxDPR);
+  if (Math.abs(renderer.getPixelRatio() - want) < 0.001) { return false; }
+  renderer.setPixelRatio(want);
+  renderer.setSize(window.innerWidth, window.innerHeight, false);
+  return true;
 }
 
 function applyTier(name) {
   var t = TIERS[name] || TIERS.HIGH;
   currentTier = TIERS[name] ? name : 'HIGH';
   renderScale = t.renderScale;
-  bloomOn = t.bloom;
+  bloomOn = resolveBloom(t.bloom);
   setShadows();
-  /* only rebuild render targets if post is already set up (setupPost may
-     not have run yet when this is called right after initEngine) */
+  applyPixelRatio();
+  /* only rebuild render targets if post is already set up (setupPost may not
+     have run yet when this is called right after initEngine) */
   if (rtScene) { applyRenderScale(); }
   return currentTier;
+}
+
+/* The settings panel can force the glow chain on or off regardless of tier.
+   'auto' hands the decision back to the tier, and to autoQuality() below. */
+function resolveBloom(tierDefault) {
+  var S = window.MeadowSettings;
+  var pref = S ? S.bloom() : 'auto';
+  if (pref === 'on') { return true; }
+  if (pref === 'off') { return false; }
+  return !!tierDefault;
 }
 
 function getTier() { return currentTier; }
@@ -362,7 +451,47 @@ function getLODScale() {
    building the scene - grass.js reads getTier() while sizing its grid in
    buildGrassGrid(), so the tier has to be known before that runs. */
 function initQuality() {
-  return applyTier(detectTier());
+  var tier = applyTier(detectTier());
+  bindSettings();
+  return tier;
+}
+
+/* ---------------------------------------------------------------- settings
+   Graphics settings apply live, without a reload, for everything that can:
+   the tier, the render scale, the glow chain and the field of view. Grass
+   density is the one exception - it is baked into the instance buffers in
+   buildGrassGrid() - and the settings panel says so on the row.
+
+   Registered once, from initQuality(), and keyed on WHICH setting changed so
+   moving the volume slider does not rebuild three render targets. */
+var settingsBound = false;
+
+function bindSettings() {
+  if (settingsBound) { return; }
+  var S = window.MeadowSettings;
+  if (!S) { return; }
+  settingsBound = true;
+
+  S.onChange(function (s, key) {
+    var all = (key === null);
+    if (all || key === 'quality') { applyTier(detectTier()); }
+    if (all || key === 'bloom') {
+      var t = TIERS[currentTier] || TIERS.HIGH;
+      bloomOn = resolveBloom(t.bloom);
+    }
+    if (all || key === 'resScale') { applyRenderScale(); }
+    if (all || key === 'fov') {
+      camera.fov = s.fov;
+      camera.updateProjectionMatrix();
+    }
+  });
+
+  /* Apply whatever was already stored from a previous visit. */
+  var v = S.get();
+  if (v.fov && v.fov !== camera.fov) {
+    camera.fov = v.fov;
+    camera.updateProjectionMatrix();
+  }
 }
 
 /* ======================================================================== *
@@ -373,6 +502,11 @@ function initQuality() {
  *  that removes 4 of those passes (or all 5 taps of the god-ray loop, which
  *  is by far the most expensive one) at essentially zero visual cost, since
  *  bloom on this art style is a polish layer, not the base look.
+ *
+ *  That sentence was aspirational for a long time: the TIERS table above said
+ *  `bloom: true` on LOW, so the fast path this comment describes had never
+ *  once run on a phone. It does now. If you are changing that table, this is
+ *  the comment that tells you what the `bloom` flag is worth.
  * ======================================================================== */
 
 /* The aerial-perspective term needs the depth attachment and the camera's
@@ -439,124 +573,193 @@ function applyPostFX(sunUV, sunAmt, fade) {
 }
 
 /* ======================================================================== *
- *  PERF HUD - F3 toggles a readout built from renderer.info. There was
- *  previously no way to measure any of this; every optimisation before this
- *  was a guess (one of them, cutting the camera far plane, deleted the sky).
+ *  PERFORMANCE READOUT
+ *
+ *  Numbers built from renderer.info. There was previously no way to measure
+ *  any of this; every optimisation before it existed was a guess, and one of
+ *  those guesses - cutting the camera far plane - deleted the sky.
+ *
+ *  The readout no longer owns any DOM. It used to create its own fixed
+ *  element at z-index 9999 and bind its own F3 handler, which is how it ended
+ *  up sitting on top of the touch controls. It now hands a string to the
+ *  interface layer, which owns every pixel above the canvas, and the F3 key
+ *  writes through MeadowSettings so the switch in the settings panel agrees
+ *  with it and the choice survives a reload.
  * ======================================================================== */
 
-var hudEl = null, hudOn = false;
 var hudAcc = 0, hudN = 0, hudFps = 0;
 
-function ensureHUD() {
-  if (hudEl) { return; }
-  hudEl = document.createElement('div');
-  hudEl.id = 'perfHud';
-  hudEl.style.cssText = [
-    'position:fixed', 'top:8px', 'left:8px', 'z-index:9999',
-    'background:rgba(0,0,0,0.6)', 'color:#a6f5a6', 'font:12px/1.5 monospace',
-    'padding:8px 12px', 'border-radius:4px', 'pointer-events:none',
-    'white-space:pre', 'display:none'
-  ].join(';');
-  document.body.appendChild(hudEl);
-  window.addEventListener('keydown', function (e) {
-    if (e.key === 'F3' || e.code === 'F3') {
-      hudOn = !hudOn;
-      hudEl.style.display = hudOn ? 'block' : 'none';
-      e.preventDefault();
-    }
-  });
+function uiHud() {
+  return (window.MeadowUI && window.MeadowUI.hud) ? window.MeadowUI.hud : null;
 }
 
 /* Call exactly once per animate() frame, after renderFrame() has issued all
    of that frame's render() calls. Reads renderer.info for the frame just
    drawn, then resets it so the next frame starts from zero (autoReset is
-   false - see setupPost - because a single frame here is 6 render() calls
-   and we want the HUD to show their total, not just the last pass). */
+   false - see setupPost - because a single frame here is up to six render()
+   calls and the total is the interesting number, not the last pass). */
 function updatePerfHUD(dt) {
-  ensureHUD();
   hudAcc += dt; hudN++;
-  if (hudOn) {
-    if (hudAcc >= 0.25) {
-      hudFps = Math.round(hudN / hudAcc);
-      hudAcc = 0; hudN = 0;
-    }
+  if (hudAcc >= 0.25) {
+    hudFps = Math.round(hudN / hudAcc);
+    hudAcc = 0; hudN = 0;
+  }
+
+  var h = uiHud();
+  /* Nothing is formatted unless somebody is looking. String building every
+     frame for a hidden element was costing more than some of the passes this
+     readout exists to measure. */
+  if (h && h.diagVisible()) {
     var info = renderer.info;
-    hudEl.textContent =
-      'FPS       ' + hudFps + '  (' + (dt * 1000).toFixed(1) + ' ms)\n' +
+    h.setDiag(
+      'FPS        ' + hudFps + '  (' + (dt * 1000).toFixed(1) + ' ms)\n' +
       'draw calls ' + info.render.calls + '\n' +
       'triangles  ' + info.render.triangles + '\n' +
-      'tier       ' + currentTier + '\n' +
-      'render scl ' + renderScale.toFixed(2) + '\n' +
-      'shadows    ' + (shadowsOn ? 'on' : 'off') + '\n' +
-      'bloom      ' + (bloomOn ? 'on' : 'off') + '\n' +
-      '[F3 to hide]';
+      'tier       ' + currentTier + (isPinned() ? ' (pinned)' : '') + '\n' +
+      'dpr        ' + renderer.getPixelRatio().toFixed(2) + '\n' +
+      'scale      ' + effScale.toFixed(2) + ' of ' + renderScale.toFixed(2) + '\n' +
+      'scene px   ' + Math.round(scenePixels() / 1000) + 'k\n' +
+      'bloom      ' + (bloomOn ? 'on' : 'off')
+    );
   }
   renderer.info.reset();
 }
 
+function isPinned() {
+  var S = window.MeadowSettings;
+  return !!(S && S.quality() !== 'auto');
+}
+
+function scenePixels() {
+  return rtScene ? rtScene.width * rtScene.height : 0;
+}
+
+/* ======================================================================== *
+ *  SIZING
+ * ======================================================================== */
 function onResize() {
   var w = window.innerWidth, h = window.innerHeight;
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
+  /* The tier's DPR ceiling has to be re-asserted here: dragging a window
+     between a retina and a non-retina display changes devicePixelRatio
+     without changing anything else, and Math.min() has to run again. */
+  applyPixelRatio();
   renderer.setSize(w, h, false);
   applyRenderScale();
 }
 
+/* The scene is drawn into rtScene at this size; the FINAL composite pass
+   writes to the real framebuffer at full canvas resolution, so edges of
+   geometry stay as crisp as the canvas is - only the shading is cheaper.
+   Every piece of interface is HTML above all of this and is never resampled
+   at all.
+
+   Two things decide the size, and the smaller wins:
+
+     renderScale   the tier's preference, nudged by autoQuality() or pinned
+                   by the player in the settings panel.
+     budget        a hard ceiling on scene pixels for this tier.
+
+   The budget is what the old flat renderScale could not express. 0.86 on a
+   13" laptop at DPR 1 is 1.1 M pixels; the same 0.86 on a 6.7" phone at DPR
+   3 - capped to 2 - is 1.4 M, on a GPU with a fraction of the bandwidth. One
+   number could not be right for both, and it was tuned on the laptop. */
 function applyRenderScale() {
   var pr = renderer.getPixelRatio();
-  makeTargets(Math.max(64, Math.floor(window.innerWidth * pr * renderScale)),
-              Math.max(64, Math.floor(window.innerHeight * pr * renderScale)));
+  var t = TIERS[currentTier] || TIERS.HIGH;
+  var S = window.MeadowSettings;
+
+  var want = renderScale;
+  /* A pinned resolution means exactly that - the budget still applies as a
+     ceiling, because a pinned 100% on a 4K phone would simply not render. */
+  var pin = S ? S.resScale() : 0;
+  if (pin > 0) { want = pin; }
+
+  var fullW = window.innerWidth * pr, fullH = window.innerHeight * pr;
+  var full = fullW * fullH;
+  if (full > 0 && full * want * want > t.budget) {
+    want = Math.sqrt(t.budget / full);
+  }
+  /* Never below a third: past that the world is mush and the honest answer
+     is a lower tier, not a smaller buffer. */
+  effScale = clamp(want, 0.34, 1.0);
+
+  makeTargets(Math.max(64, Math.floor(fullW * effScale)),
+              Math.max(64, Math.floor(fullH * effScale)));
 }
+
+/* ======================================================================== *
+ *  FRAME-TIME GOVERNOR
+ * ======================================================================== */
 
 var frameAcc = 0, frameN = 0, adjustments = 0;
 
-/* How many frames to watch before acting. The shipped figure was 55 for
-   every decision, and 55 frames on a phone that is running at 20 fps is
-   nearly three seconds - times three or four steps before the render scale
-   reaches a size the device can hold. That is the "it feels very laggy"
-   window, and it was spent measuring something the first second had already
-   made obvious.
+/* How many frames to watch before acting. The shipped figure was 55 for every
+   decision, and 55 frames on a phone running at 20 fps is nearly three
+   seconds - times three or four steps before the render scale reaches a size
+   the device can hold. That is the "it feels very laggy" window, and it was
+   spent measuring something the first second had already made obvious.
 
    The first few judgements are made on a much shorter sample and the window
    widens as it settles, which is the usual shape for this kind of governor:
    quick to find the right ballpark, slow and steady afterwards so it cannot
-   oscillate. Nothing about the steady state changes - the tiers, the floors
-   and the order things are given up in are all untouched. */
+   oscillate. */
 function sampleFrames() {
   return adjustments < 1 ? 18 : (adjustments < 3 ? 30 : 55);
 }
 
 function autoQuality(dt) {
+  /* A player who pinned a resolution in the settings panel has said what they
+     want. Measuring is still useful - the readout keeps working - but the
+     governor does not get to overrule them. */
+  var S = window.MeadowSettings;
+  if (S && S.resScale() > 0) { return; }
+
   frameAcc += dt; frameN++;
   if (frameN < sampleFrames()) { return; }
   var avg = frameAcc / frameN;
   frameAcc = 0; frameN = 0;
-  var tierCfg = TIERS[currentTier] || TIERS.HIGH;
+  var t = TIERS[currentTier] || TIERS.HIGH;
+
   if (avg > 0.0225) {
     adjustments++;
-    if (renderScale > tierCfg.minScale) {
+    /* Order matters, and it is the opposite of what shipped. The glow chain
+       is four passes; the render scale is a fraction of one. Giving up bloom
+       first buys more frame time than three steps of resolution AND leaves
+       the picture sharp, so it is no longer the last resort - it is the first
+       thing to go, as soon as the frame is properly over budget.
+
+       It only goes if the player left it on 'auto'. An explicit "on" is a
+       choice, not a default to be overridden. */
+    var bloomPref = S ? S.bloom() : 'auto';
+    if (bloomOn && bloomPref === 'auto' && avg > 0.028) {
+      bloomOn = false;
+      return;
+    }
+    if (renderScale > t.minScale) {
       /* Step in proportion to how far over budget the frame actually is,
-         instead of always shaving the same 0.13. A device at 45 ms/frame
+         instead of always shaving the same amount. A device at 45 ms/frame
          needs the whole way down and used to get there in four separate
          waits; one at 24 ms needs a nudge and now gets a nudge. */
       var over = clamp(avg / 0.0225 - 1, 0, 1);
-      renderScale = Math.max(tierCfg.minScale, renderScale - (0.10 + 0.22 * over));
+      renderScale = Math.max(t.minScale, renderScale - (0.10 + 0.22 * over));
       applyRenderScale();
-    } else if (bloomOn && avg > 0.030) {
-      /* last resort: render scale is already at this tier's floor and
-         shadows are already off, and it is STILL not holding the frame
-         budget. Drop the whole bloom/god-ray chain - several full-screen
-         passes, and the god-ray loop alone is a 14-tap blur - rather than
-         degrade resolution further into visibly blurry territory. */
-      bloomOn = false;
     }
-  } else if (avg < 0.0132 && renderScale < tierCfg.renderScale) {
-    renderScale = Math.min(tierCfg.renderScale, renderScale + 0.09);
-    applyRenderScale();
+  } else if (avg < 0.0132) {
+    /* Comfortably inside budget: give back what was taken, resolution first,
+       then the glow chain - the reverse of the order it was surrendered in,
+       so the picture sharpens before it sparkles. */
+    if (renderScale < t.renderScale) {
+      renderScale = Math.min(t.renderScale, renderScale + 0.09);
+      applyRenderScale();
+    } else if (!bloomOn && t.bloom && (S ? S.bloom() : 'auto') === 'auto' && avg < 0.0110) {
+      bloomOn = true;
+    }
   }
 }
 
 /* the blur pass ping-pongs between the two half-size targets */
 function swapTargets() { var t = rtA; rtA = rtB; rtB = t; }
 
-export { swapTargets, TIERS, getLODScale, VERT_FS, applyPostFX, applyRenderScale, applyTier, autoQuality, bloomOn, detectTier, frameAcc, frameN, fsCam, fsPass, fsQuad, fsScene, getTier, initQuality, mBlur, mBright, mComp, mRays, makeTargets, onResize, renderScale, rtA, rtB, rtScene, setShadows, setupPost, shadowsOn, updatePerfHUD };
+export { swapTargets, TIERS, getLODScale, VERT_FS, applyPostFX, applyPixelRatio, applyRenderScale, applyTier, autoQuality, bloomOn, detectTier, effScale, frameAcc, frameN, fsCam, fsPass, fsQuad, fsScene, getTier, initQuality, mBlur, mBright, mComp, mRays, makeTargets, onResize, renderScale, rtA, rtB, rtScene, setShadows, setupPost, shadowsOn, updatePerfHUD };

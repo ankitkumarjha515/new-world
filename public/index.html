@@ -2,113 +2,64 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<!-- No maximum-scale / user-scalable=no: those are ignored by modern iOS
+     anyway, and declaring them trips an accessibility failure for anyone who
+     relies on zoom. Pinch-zoom while PLAYING is suppressed in ui/controls.js,
+     which is the only place it actually causes trouble, and the menus stay
+     zoomable. viewport-fit=cover is what makes env(safe-area-inset-*) real. -->
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0d1620">
+<meta name="description" content="A hand-painted procedural open world you can walk around in. No install, no account.">
 <title>Whispering Meadow</title>
-<style>
-  :root{
-    --ink:#243447; --paper:#f7f1e3;
-  }
-  *{box-sizing:border-box}
-  html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#0d1620;
-    font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
-    -webkit-font-smoothing:antialiased;}
-  #app{position:fixed;inset:0}
-  canvas{display:block;width:100%;height:100%}
 
-  /* ---------- overlays (never visible while playing) ---------- */
-  .veil{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
-    text-align:center;z-index:10;color:#fdfaf2;
-    background:
-      radial-gradient(120% 90% at 50% 8%, rgba(140,196,232,.30), rgba(0,0,0,0) 62%),
-      radial-gradient(90% 70% at 50% 108%, rgba(244,203,110,.28), rgba(0,0,0,0) 60%),
-      linear-gradient(178deg,#16283c 0%,#1d3b4f 18%,#1b3346 42%,#123043 100%);
-    transition:opacity .9s ease, visibility .9s;}
-  .veil.hidden{opacity:0;visibility:hidden;pointer-events:none}
-  .card{max-width:min(660px,88vw);padding:6vh 4vw}
-  .kicker{letter-spacing:.42em;text-transform:uppercase;font-size:11px;opacity:.62;margin-bottom:22px;
-    font-family:ui-sans-serif,system-ui,"Segoe UI",sans-serif;font-weight:600}
-  h1{margin:0 0 4px;font-size:clamp(38px,6.4vw,70px);font-weight:400;line-height:1.02;letter-spacing:.005em;
-     text-shadow:0 2px 40px rgba(0,0,0,.5)}
-  h1 em{font-style:italic;color:#f6d98a}
-  .sub{margin:16px auto 0;max-width:44ch;font-size:clamp(14px,1.5vw,17px);line-height:1.7;opacity:.78;font-style:italic}
-  .keys{margin:34px auto 0;display:flex;flex-wrap:wrap;gap:8px 10px;justify-content:center;max-width:460px;
-    font-family:ui-sans-serif,system-ui,"Segoe UI",sans-serif}
-  .keys span{font-size:11.5px;letter-spacing:.06em;padding:7px 12px;border-radius:999px;
-    background:rgba(255,255,255,.075);border:1px solid rgba(255,255,255,.14);opacity:.86}
-  .keys b{font-weight:700;color:#f6d98a}
-  .cta{margin-top:38px;display:inline-block;cursor:pointer;user-select:none;
-    padding:15px 44px;border-radius:999px;font-family:ui-sans-serif,system-ui,"Segoe UI",sans-serif;
-    font-size:13px;letter-spacing:.24em;text-transform:uppercase;font-weight:700;color:#20303f;
-    background:linear-gradient(180deg,#ffe9ad,#f2c76a);
-    box-shadow:0 12px 40px -12px rgba(246,217,138,.85), inset 0 1px 0 rgba(255,255,255,.7);
-    transition:transform .18s ease, box-shadow .18s ease}
-  .cta:hover{transform:translateY(-2px);box-shadow:0 20px 52px -14px rgba(246,217,138,.95), inset 0 1px 0 rgba(255,255,255,.8)}
-  .cta:active{transform:translateY(0)}
-  .tiny{margin-top:26px;font-size:11.5px;letter-spacing:.05em;opacity:.42;
-    font-family:ui-sans-serif,system-ui,"Segoe UI",sans-serif}
+<!-- Interface styles first and blocking, deliberately: they are 20 KB of
+     plain CSS and they are what paints the title card. The 3D engine below
+     is loaded after, and asynchronously, so the first frame a phone shows
+     does not wait on a megabyte of Three.js. -->
+<link rel="stylesheet" href="/ui/tokens.css">
+<link rel="stylesheet" href="/ui/ui.css">
 
-  /* loading */
-  #bar{width:min(300px,60vw);height:2px;margin:30px auto 0;background:rgba(255,255,255,.14);border-radius:2px;overflow:hidden}
-  #bar>i{display:block;height:100%;width:0%;background:linear-gradient(90deg,#f6d98a,#9fe3c9);transition:width .35s ease}
-  #loadmsg{margin-top:16px;font-size:12px;letter-spacing:.18em;text-transform:uppercase;opacity:.55;
-    font-family:ui-sans-serif,system-ui,"Segoe UI",sans-serif}
-
-  /* the soft cinematic edge that frames the picture while playing */
-  #frame{position:fixed;inset:0;z-index:5;pointer-events:none;
-    box-shadow:inset 0 0 220px 40px rgba(12,20,30,.28);opacity:0;transition:opacity 1.6s ease .3s}
-  #frame.on{opacity:1}
-</style>
+<!-- The engine and the first model are both needed within a second of the
+     page appearing, and on a phone the round trip is most of that second. -->
+<link rel="modulepreload" href="/vendor/three/build/three.module.js">
 </head>
 <body>
+
 <div id="app"></div>
 <div id="frame"></div>
 
-<div class="veil" id="loading">
+<!-- The boot screen is STATIC MARKUP, not built by JavaScript.
+
+     ui/ui.js adopts this element instead of creating its own, so the title
+     card is on screen as soon as the CSS above has loaded - no module parse,
+     no engine download, nothing to wait for. Everything else in the
+     interface is built in ui/screens.js; this one card is the exception
+     because it is the only thing anybody sees during boot. -->
+<div class="screen opaque on" id="screen-boot">
   <div class="card">
     <div class="kicker">A place that does not exist</div>
-    <h1>Whispering <em>Meadow</em></h1>
-    <div id="bar"><i></i></div>
-    <div id="loadmsg">Growing the world&hellip;</div>
+    <h1 class="hero">Whispering <em>Meadow</em></h1>
+    <div id="boot-bar"><i></i></div>
+    <div id="boot-msg">Growing the world&hellip;</div>
   </div>
 </div>
 
-<div class="veil hidden" id="start">
-  <div class="card">
-    <div class="kicker">Walk anywhere. Stay as long as you like.</div>
-    <h1>Whispering <em>Meadow</em></h1>
-    <p class="sub">Sunflowers to the east, a waterfall in the north cliffs,
-       and a warm sea at the end of the river. The wind never quite stops.</p>
-    <div class="keys">
-      <span><b>W A S D</b> walk</span>
-      <span><b>Mouse</b> look</span>
-      <span><b>Shift</b> run</span>
-      <span><b>Space</b> jump</span>
-      <span><b>Esc</b> pause</span>
-    </div>
-    <div class="cta" id="enter">Step outside</div>
-    <div class="tiny">Best with headphones &middot; click the page to capture the mouse</div>
-  </div>
-</div>
+<!-- Settings must be live before the interface reads it. Plain script, so it
+     is also reachable from net.js and voice.js, which are not modules. -->
+<script src="/settings.js"></script>
 
-<div class="veil hidden" id="paused">
-  <div class="card">
-    <div class="kicker">The wind is holding its breath</div>
-    <h1>Paused</h1>
-    <div class="cta" id="resume">Return to the meadow</div>
-  </div>
-</div>
+<!-- The interface. Loads and runs independently of the 3D engine, which is
+     why the menus, the settings panel and the touch controls all work even
+     if WebGL never starts. -->
+<script type="module" src="/ui/ui.js"></script>
 
 <!-- Multiplayer, chat and proximity voice. Publishes window.MeadowNet;
      net.js loads voice.js on its own. Safe if the server is unreachable. -->
-<script src="settings.js"></script>
-<script src="net.js"></script>
+<script src="/net.js"></script>
 
-<!-- The game now lives in game/*.js as plain ES modules.
-     Nothing is bundled or built: edit a file, refresh the page. -->
 <!-- The engine is served from this site, once.
 
      It used to arrive twice from a CDN: three.min.js (645 KB) as a global
@@ -126,12 +77,19 @@
 <script type="importmap">
 { "imports": { "three": "/vendor/three/build/three.module.js" } }
 </script>
+
 <script type="module">
 (async function () {
+  /* Every failure below has to reach the player as words on the boot card,
+     not as a console entry on a phone that has no console. MeadowUI may not
+     have finished evaluating if ITS module failed, so this falls back to
+     writing the element directly. */
   function fail(msg) {
-    var el = document.getElementById('loadmsg');
-    if (el) { el.textContent = msg; }
+    if (window.MeadowUI) { window.MeadowUI.failed(msg); return; }
+    var el = document.getElementById('boot-msg');
+    if (el) { el.textContent = msg; el.className = 'error'; }
   }
+
   var mod = null;
   try {
     mod = await import('/vendor/three/build/three.module.js');
@@ -144,12 +102,14 @@
     fail('Could not load the 3D engine — check your connection and reload.');
     return;
   }
+
   /* A copy, not the namespace object itself: module namespaces are frozen,
      and models.js caches the loader class on THREE.GLTFLoader once it has
      it. Assigning to a frozen namespace throws in strict mode. */
   window.THREE = Object.assign({}, mod);
+
   try {
-    await import('./game/main.js');
+    await import('/game/main.js');
     window.__startWorld();
   } catch (err) {
     console.error(err);

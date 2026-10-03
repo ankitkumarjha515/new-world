@@ -42,7 +42,10 @@ function buildSmoke() {
   for (var i = 0; i < N; i++) {
     /* evenly spread phases, jittered - a perfectly even column pulses */
     seed.push((i + rng() * 0.8) / N);
-    siz.push(20 + rng() * 26);
+    /* Was 20-46. Against a cone that rises 300 units, puffs that size made
+       the column read as a bonfire on a hilltop rather than an eruption - it
+       is the one object in the frame whose whole job is scale. */
+    siz.push(34 + rng() * 42);
     varI.push(Math.floor(rng() * 3));
     swirl.push(rng() * TAU);
   }
@@ -58,18 +61,33 @@ function buildSmoke() {
   g.instanceCount = N;
 
   smokeMat = new THREE.ShaderMaterial({
-    /* OPAQUE, like the clouds. A plume is a stack of big overlapping cards
-       and blending them was the most expensive thing on the volcano by a
-       wide margin. depthWrite is ON here (unlike the clouds): the smoke sits
-       at about 800 units, close enough that the composite's haze reading its
-       depth is correct rather than ruinous, and writing depth is what lets
-       the puffs occlude each other properly now that they cannot blend. */
-    transparent: false, depthWrite: true, side: THREE.DoubleSide, fog: false,
+    /* BLENDED, after three attempts at keeping it opaque.
+
+       The original was opaque with an ordered-dither cut, chosen because
+       blending a stack of big overlapping cards is the most expensive thing
+       on this mountain. The trouble is that the puff texture carries alpha
+       across its whole tile, so the dither compare fired over the entire
+       QUAD rather than over the round puff inside it - and the artefact that
+       produced was a grid of grey dots in neat rectangles painted across the
+       blue sky beside the column. Narrowing the fade window helped; cropping
+       the texture's halo did not. A screen-door dither that is plainly
+       visible as a screen door is not doing its job.
+
+       So this is a deliberate trade: a little fill rate on 44 quads, for a
+       plume that does not look like a rendering fault. depthWrite goes off
+       with it, as it must for blended geometry - the puffs no longer occlude
+       each other, which for smoke is the correct read anyway. If this ever
+       shows up in a frame-time measurement, the fix is a tighter puff
+       texture, not a return to the dither. */
+    transparent: true, depthWrite: false, side: THREE.DoubleSide, fog: false,
     uniforms: commonUniforms({
       uMap: { value: makePuffTexture(3) },
       uVent: { value: new THREE.Vector3(VOLC.x, ventY, VOLC.z) },
       uHot: { value: new THREE.Color(0xff8a24) },
-      uDark: { value: new THREE.Color(0x17161a) },
+      /* Not black. Against a cobalt sky an almost-black ash cloud reads as a
+         hole cut in the picture; real ash at this distance is a warm charcoal
+         with the sky's light wrapping its edge. */
+      uDark: { value: new THREE.Color(0x2a2630) },
       uPale: { value: new THREE.Color(0x53525c) }
     }),
     vertexShader: [
@@ -85,7 +103,11 @@ function buildSmoke() {
       /* Rise fast out of the throat, then slow as it loses buoyancy. The
          square root is what gives the column its shape: tight and quick at
          the vent, broad and lazy at the top. */
-      '  float climb = sqrt(t);',
+      /* sqrt(t) climbs fastest exactly at t = 0, so a puff was already fifty
+         units up by the time it was big enough to see and the column floated
+         clear of the crater with a gap under it. A gentler exponent keeps the
+         same lazy top while letting the base stay down in the throat. */
+      '  float climb = pow(t, 0.80);',
       '  float y = uVent.y + climb * 405.0;',
       /* spread: a narrow throat opening into a cauliflower head */
       '  float spread = 7.0 + t * t * 132.0;',
@@ -95,15 +117,27 @@ function buildSmoke() {
       '  o.x += t * t * 92.0;',
       '  o.z += t * t * 26.0;',
       /* puffs grow as they cool and entrain air */
-      '  float sc = aSize * (0.40 + climb * 2.75);',
+      /* Born small, in the vent, rather than arriving full size. */
+      '  float sc = aSize * (0.18 + climb * 3.40);',
       '  vec3 rgt = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]);',
       '  vec3 upv = vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]);',
       '  vec3 wp = o + rgt * position.x * sc + upv * position.y * sc;',
       '  vec4 mv = viewMatrix * vec4(wp, 1.0);',
       '  vDist = -mv.z;',
-      /* born quickly, dead long before it reaches full size - an old puff
-         that is still opaque is just wasted fill rate */
-      '  vA = smoothstep(0.0, 0.06, t) * (1.0 - smoothstep(0.44, 1.0, t));',
+      /* THE WINDOW IS WHY THE DITHER WAS VISIBLE.
+
+         vA scales the whole sprite uniformly, and the old death ramp ran from
+         t = 0.44 to t = 1.0 - so more than half of every puff's life was
+         spent at a uniform partial alpha. The screen-door compare then fired
+         across the ENTIRE area of those puffs at once, which is not a
+         dissolve, it is a 4x4 grid of squares painted over the sky. It was
+         the most obviously broken-looking thing on the mountain.
+
+         Opaque for most of the life and dithered only at the very ends. The
+         dissolve still does its job - a puff never snaps in or out - but the
+         pattern is now confined to a brief fringe instead of being the
+         dominant texture of the column. An ash column is opaque anyway. */
+      '  vA = smoothstep(0.0, 0.05, t) * (1.0 - smoothstep(0.74, 0.96, t));',
       '  gl_Position = projectionMatrix * mv;',
       '}'
     ].join('\n'),
@@ -119,16 +153,31 @@ function buildSmoke() {
       'float sB2(vec2 a){ a = floor(a); return fract(a.x*0.5 + a.y*a.y*0.75); }',
       'float sB4(vec2 a){ return sB2(a*0.5)*0.25 + sB2(a); }',
       'void main(){',
-      '  float a = texture2D(uMap, vUv).a * vA;',
-      '  if (a < sB4(gl_FragCoord.xy)) discard;',
+      /* The dissolve band is sharpened before it meets the dither. With the
+         texture's own soft falloff going straight into the Bayer compare, a
+         wide ring of every puff sat near the threshold at once and the 4x4
+         pattern became plainly visible as a grid of squares against the sky -
+         which is exactly what a screen-door dither must never do.
+
+         The thresholds also crop the puff texture's soft outer halo. That
+         halo covers most of the quad at a low alpha, so without cropping it
+         the dithered region was the whole SQUARE rather than the round puff -
+         which is why the artefact read as rectangles rather than as edges. */
+      '  float a = smoothstep(0.16, 0.62, texture2D(uMap, vUv).a) * vA;',
+      '  if (a < 0.004) discard;',
       /* Lit from below by the vent for the first stretch, then the ash
          itself takes over and it goes near-black, then it thins to pale
          grey as it disperses. That three-stage read is what separates an
          eruption column from a chimney. */
-      '  vec3 col = mix(uHot * 2.4, uDark, smoothstep(0.0, 0.155, vT));',
+      /* 2.4 put this at (2.4, 1.3, 0.34) - far past white before the glow
+         chain had even seen it - so the base of the column bloomed into a
+         featureless yellow ball sitting over the crater like a bulb. Hot, but
+         still a colour. The window is shorter too, so the ash takes over
+         sooner and the lit part stays down in the throat where it belongs. */
+      '  vec3 col = mix(uHot * 1.30, uDark, smoothstep(0.0, 0.10, vT));',
       '  col = mix(col, uPale, smoothstep(0.52, 1.0, vT));',
       '  col = applyFog(col, vDist * 0.55);',
-      '  gl_FragColor = vec4(col, 1.0);',
+      '  gl_FragColor = vec4(col, a);',
       '}'
     ].join('\n')
   });

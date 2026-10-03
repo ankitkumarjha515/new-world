@@ -273,7 +273,16 @@ function volcanoBare(x, z) {
      The second smoothstep is not decoration - it forces the mask to zero
      exactly where the radius guard above cuts it off, so a positive noise
      offset cannot leave a step in the colour at the edge of the cone. */
-  return smoothstep(0.96 + edgeN, 0.74 + edgeN, t) * smoothstep(1.0, 0.90, t);
+  /* The band was 0.96 -> 0.74, which is 0.22 of the radius and therefore
+     nearly eighty units of slow crossfade from grass to rock. At the distance
+     this mountain is normally seen from, eighty units of fade is a smear, not
+     an edge. Narrowed to 0.93 -> 0.80 - about forty-seven units - which still
+     keeps the treeline low on the cone, where DESIGN-AGENT.md wants it and
+     where the reference has it, while letting it read as a line.
+
+     terrain.js paints a dry-grass fringe across what remains, so the
+     transition is grass -> straw -> cinder rather than a single fade. */
+  return smoothstep(0.93 + edgeN, 0.80 + edgeN, t) * smoothstep(1.0, 0.90, t);
 }
 
 /* the one true height function - used by the mesh, the player, and by every
@@ -514,14 +523,23 @@ function initEngine() {
   _e = new THREE.Euler(); _v3 = new THREE.Vector3(); _pv = new THREE.Vector3();
 
   renderer = new THREE.WebGLRenderer({ antialias: false, stencil: false, powerPreference: 'high-performance' });
-  /* This cap is why the phone looked so much worse than the laptop, and it
-     had nothing to do with the quality tiers. A laptop reports a pixel ratio
-     of 1, so it was never capped at all. A phone reports 2.6 to 3.5, so it
-     was rendering at barely a third of the linear resolution of its own
-     screen and letting the browser upscale the difference - which is exactly
-     what "blurry" looks like. 2.0 is where the returns flatten on a screen
-     held at arm's length, and it is what shipped games settle on; going to a
-     true 3.0 would cost 2.25x the pixels for a difference nobody can see. */
+  /* A STARTING value only. post.js owns the pixel ratio from here on:
+     initQuality() runs immediately after this function and applyPixelRatio()
+     re-caps it per quality tier (1.5 on LOW, 1.75 on MEDIUM, 2.0 on HIGH).
+
+     The history is worth keeping, because the number looks wrong until you
+     know it. A laptop reports a pixel ratio of 1 and was never capped at all.
+     A phone reports 2.6 to 3.5, so an earlier cap had it rendering at barely
+     a third of the linear resolution of its own screen and letting the
+     browser upscale the difference - which is exactly what "blurry" looks
+     like. 2.0 was chosen as the point where returns flatten on a screen held
+     at arm's length.
+
+     What has changed since is that the INTERFACE is no longer drawn on this
+     canvas. Every menu, the HUD and the touch controls are HTML above it
+     (see ui/), so lowering the canvas ratio on a weak device no longer
+     softens a single letter of text - it only costs world detail, which is
+     a trade worth making at 20 fps and was not available before. */
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2.0));
   renderer.setSize(window.innerWidth, window.innerHeight, false);
   renderer.outputColorSpace = THREE.LinearSRGBColorSpace;

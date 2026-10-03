@@ -1,0 +1,34 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "whispering-meadow",
+  "compatibility_date": "2025-09-01",
+  "main": "src/index.js",
+
+  // The ONLY difference from wrangler.jsonc is this directory. `npm run dev`
+  // serves public/ straight off disk so a refresh is all it takes to see an
+  // edit; `npm run deploy` runs tools/build.mjs first and ships dist/, which
+  // is the same tree with the JavaScript bundled and the CSS merged.
+  //
+  // Two files rather than one flag because wrangler resolves `assets.directory`
+  // relative to the config, and a single config that sometimes means one
+  // directory and sometimes another is the kind of thing that deploys the
+  // wrong build at midnight.
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
+  },
+
+  "durable_objects": {
+    "bindings": [
+      { "name": "MEADOW", "class_name": "Meadow" }
+    ]
+  },
+
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["Meadow"] }
+  ],
+
+  "observability": {
+    "enabled": true
+  }
+}

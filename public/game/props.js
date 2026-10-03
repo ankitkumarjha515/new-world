@@ -1701,18 +1701,26 @@ function buildGardenAccents() {
   // Bench 3: Overlooking the sparkling turquoise ocean shoreline
   addBench(42, 385, 0.15);
 
-  // Rustic wooden posts along sections of the garden path (Image 4)
-  var postP = [
-    { x: 52, z: 202 }, { x: 44, z: 194 }, { x: 34, z: 184 },
-    { x: 20, z: 176 }, { x: 6, z: 164 }, { x: -8, z: 152 },
-    { x: -24, z: 136 }, { x: -38, z: 118 },
-    { x: 62, z: 242 }, { x: 60, z: 275 }, { x: 54, z: 320 }
-  ];
-  for (var p = 0; p < postP.length; p++) {
-    var pt = postP[p];
-    var ph = groundY(pt.x, pt.z) - 0.08;
-    gb.add(new THREE.CylinderGeometry(0.07, 0.09, 1.25, 5), M4(pt.x, ph + 0.60, pt.z), woodD, 0.07, rng);
-  }
+  /* The "rustic wooden posts along the garden path" are GONE, and this note
+     is here so nobody adds them back from the reference image.
+
+     They were eleven bare cylinders - 1.25 units tall, 7 cm across, in woodD
+     (0x5e4129, which under the toon ramp's shaded rung is very close to
+     black) - dropped along the walkway with nothing joining them. A fence
+     post reads as a fence post because of the rail; with no rail and no gate
+     and no reason, eleven dark stakes at head height in open grass read as
+     debris. The first thing anybody said about them, unprompted, was that
+     they were "black wood like thing hanging in air" and that they did not
+     make any sense - which is exactly right, and they were standing right
+     beside the spawn point where they were the first thing you saw.
+
+     Two of them (52,202 and 44,194) were within fifteen units of where the
+     player starts.
+
+     If something IS wanted along this path later, it has to be a thing and
+     not a fragment of one: a rail fence with posts AND rails, or lanterns
+     with a light in them. The benches above are the model - they are a whole
+     object, so they look placed rather than dropped. */
 
   var mesh = new THREE.Mesh(gb.build(), new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: toonRamp() }));
   mesh.castShadow = true; mesh.receiveShadow = true;

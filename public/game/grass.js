@@ -22,10 +22,25 @@ var GRASS_TIERS = {
      nothing over the last fifth of the radius (see `fade` below), so
      pulling the radius in moves that dissolve closer rather than putting a
      hard line on the ground. */
-  LOW: { ring: 2, density: 0.80 },
-  MEDIUM: { ring: 3, density: 0.92 },
+  LOW: { ring: 2, density: 0.70 },
+  MEDIUM: { ring: 3, density: 0.88 },
   HIGH: { ring: 3, density: 1.0 }
 };
+
+/* Why LOW only moved from 0.80 to 0.70, when the phone was the thing being
+   fixed: the big saving in this pass was switching the 4-pass glow chain off
+   on LOW, where the TIERS table in post.js had been leaving it ON despite its
+   own comment. That is worth several times what grass density is worth, and
+   DESIGN-AGENT.md is explicit that changes go in one at a time with a
+   screenshot - stacking a big win and a speculative one makes it impossible
+   to tell which did the work.
+
+   So: grass is the SECOND knob, and this is a conservative turn of it. If a
+   phone still misses frame budget after the glow chain is gone, come back
+   here before touching the ring - the shader dissolves each tuft over the
+   last fifth of the radius, so pulling `ring` in moves that dissolve closer
+   rather than drawing a hard line on the ground, but at ring 1 the circle is
+   only 54 units and the edge of it becomes visible as you walk. */
 
 var grassDensity = 1.0;
 

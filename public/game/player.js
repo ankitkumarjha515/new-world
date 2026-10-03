@@ -10,31 +10,38 @@ var P = {
   ground: 0, onGround: true, bob: 0, bobAmt: 0
 };
 
-var keys = {}, playing = false, started = false, ready = false;
+var keys = {};
 
 var WALK = 4.6, RUN = 9.4, EYE = 1.82;
-var TOUCH_LOOK = 0.0055;   /* radians of turn per screen pixel of thumb drag */   /* raised from 1.68 - the view sat too low */
+var TOUCH_LOOK = 0.0055;   /* radians of turn per screen pixel of thumb drag */
 
-/* ---------------------------------------------------------------- touch?
-   Pointer lock does not exist on phones, and the game gates `playing` on
-   pointerlockchange - so on a touch device the world would load and then
-   never start. Everything below routes around that. */
-var _isTouch = null;
-function isTouchDevice() {
-  if (_isTouch !== null) { return _isTouch; }
-  var coarse = false;
-  try { coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches; } catch (e) {}
-  _isTouch = (navigator.maxTouchPoints > 0 || 'ontouchstart' in window) && coarse;
-  return _isTouch;
+/* ---------------------------------------------------------------- who owns
+   `playing`?  ui/ui.js does, and that is the point.
+
+   This file used to own it, and drive it from pointerlockchange. Pointer lock
+   does not exist on a touch device, so on a phone the branch that showed the
+   pause screen could never run - there was no pause at all - and the one that
+   set `playing` had to be bypassed by main.js calling setPlaying(true) by
+   hand. Two sources of truth for one piece of state, and the phone got the
+   broken one.
+
+   There is now one state machine, in the interface layer, and everything here
+   reads from it. Pointer lock FOLLOWS that state instead of defining it. */
+function uiPlaying() {
+  var U = window.MeadowUI;
+  return U ? U.isPlaying() : false;
 }
 
-/* main.js flips this once the player has tapped Enter on a touch device */
-function setPlaying(v) { playing = v; }
-
-/* The touch layer (game/touch.js) registers itself here. On desktop this
-   stays null and nothing below costs anything. */
+/* The touch controls, if this device has any. Looked up lazily and cached:
+   ui/ui.js builds them during DOMContentLoaded, which may be after this
+   module is evaluated. */
 var touchAPI = null;
-function setTouchAPI(api) { touchAPI = api; }
+function touch() {
+  if (touchAPI) { return touchAPI; }
+  var U = window.MeadowUI;
+  if (U && U.input) { touchAPI = U.input(); }
+  return touchAPI;
+}
 
 function playerStart() {
   P.pos = new THREE.Vector3(60, 0, 205);
@@ -58,10 +65,11 @@ function updatePlayer(dt) {
 
   /* --- touch input folds in here, so everything downstream (collision,
      bob, footsteps, the network layer) works unchanged on a phone --- */
-  if (touchAPI && touchAPI.isActive()) {
-    var mv = touchAPI.getMove();
+  var tc = touch();
+  if (tc && tc.isActive()) {
+    var mv = tc.getMove();
     if (mv && (mv.x || mv.y)) { f = mv.y; s = mv.x; }
-    var lk = touchAPI.consumeLook();
+    var lk = tc.consumeLook();
     if (lk && (lk.dx || lk.dy)) {
       var St = window.MeadowSettings;
       /* A thumb drag covers far less screen than a mouse sweep, so matching
@@ -78,8 +86,8 @@ function updatePlayer(dt) {
       P.yaw -= lk.dx * TOUCH_LOOK * ts;
       P.pitch = clamp(P.pitch - lk.dy * TOUCH_LOOK * ts * inv, -1.45, 1.42);
     }
-    if (touchAPI.isSprinting()) { keys.shift = true; } else { keys.shift = false; }
-    keys.space = !!touchAPI.isJumping();
+    keys.shift = !!tc.isSprinting();
+    keys.space = !!tc.isJumping();
   }
   var l = Math.sqrt(f * f + s * s);
   /* Was `l > 0`, which normalised EVERY input to a unit vector. Fine for
@@ -167,9 +175,12 @@ function bindInput() {
   window.addEventListener('keyup', function (e) {
     var k = keyName(e); if (k) { keys[k] = false; }
   });
+  /* Alt-tabbing away with W held would otherwise leave you walking into the
+     sea while the tab is in the background. */
   window.addEventListener('blur', function () { keys = {}; });
+
   document.addEventListener('mousemove', function (e) {
-    if (!playing) { return; }
+    if (!uiPlaying()) { return; }
     var St = window.MeadowSettings;
     var ms = St ? St.lookSens() : 1.0;
     var inv = St && St.invertY() ? -1 : 1;
@@ -177,37 +188,23 @@ function bindInput() {
     P.pitch -= e.movementY * 0.0021 * ms * inv;
     P.pitch = clamp(P.pitch, -1.45, 1.42);
   });
-  document.addEventListener('pointerlockchange', function () {
-    /* On a touch device there is no pointer lock to gain or lose, so this
-       must not be allowed to force `playing` back to false. */
-    if (isTouchDevice()) { return; }
-    var locked = document.pointerLockElement === document.body;
-    playing = locked && started;
-    document.getElementById('paused').classList.toggle('hidden', !(started && !locked));
-    document.getElementById('frame').classList.toggle('on', playing);
-    if (!locked) { keys = {}; }
-  });
 
-  /* Phones pause by being backgrounded, not by losing a pointer lock. */
-  document.addEventListener('visibilitychange', function () {
-    if (!isTouchDevice()) { return; }
-    if (document.hidden) { playing = false; keys = {}; }
-    else if (started) { playing = true; }
-  });
+  /* Keys are dropped whenever play stops, from wherever it stopped - a lost
+     pointer lock, Escape, the pause button, the app being backgrounded. The
+     interface layer knows about all of those; this file no longer has to
+     enumerate them, which is what the old pair of pointerlockchange and
+     visibilitychange handlers here were doing (and getting wrong on touch). */
+  var U = window.MeadowUI;
+  if (U) {
+    U.on('statechange', function () {
+      if (!U.isPlaying()) { keys = {}; }
+    });
+  }
+
+  /* MUST stay registered before post.js's own resize work is needed - main.js
+     relies on this listener having run by the time it redraws a single frame
+     after a rotation. */
   window.addEventListener('resize', onResize);
 }
 
-function lockPointer() {
-  var el = document.body;
-  if (el.requestPointerLock) { el.requestPointerLock(); }
-}
-
-/* ======================================================================== *
- *  BOOT
- * ======================================================================== */
-
-/* main.js drives the boot sequence, so it needs to flip these */
-function setReady(v) { ready = v; }
-function setStarted(v) { started = v; }
-
-export { setTouchAPI, setPlaying, isTouchDevice, setReady, setStarted, EYE, P, RUN, WALK, bindInput, canStand, keyName, keys, lockPointer, playerStart, playing, ready, started, updatePlayer };
+export { EYE, P, RUN, WALK, bindInput, canStand, keyName, keys, playerStart, updatePlayer };

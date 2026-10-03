@@ -1,0 +1,98 @@
+/* ==========================================================================
+   WHISPERING MEADOW - design tokens
+
+   One place for colour, type, spacing, motion and stacking. Every other
+   stylesheet in ui/ reads from here and defines no raw values of its own,
+   so the whole interface can be re-pitched by editing this file alone.
+
+   The palette is not invented: it is the palette the WORLD is already lit
+   with. DESIGN-AGENT.md commits the renderer to split tone - gold in the
+   light, blue in the shade, never grey - and an interface that picks its own
+   accent colour fights the picture behind it. Gold and mint below are the
+   same two values post.js grades toward.
+   ========================================================================== */
+
+:root {
+  /* ---- colour ---------------------------------------------------------- */
+  --c-ink:        #12222e;   /* text on paper */
+  --c-ink-soft:   #44586a;
+  --c-paper:      #f7f1e3;   /* warm vellum, the panel ground */
+  --c-cream:      #fdfaf2;   /* text on dark */
+  --c-gold:       #f6d98a;   /* the sun side. primary accent */
+  --c-gold-deep:  #e8b94f;
+  --c-mint:       #9fe3c9;   /* the shade side. secondary accent */
+  --c-teal:       #123043;
+  --c-teal-deep:  #0d1620;   /* page background, matches theme-color */
+
+  /* Panels. Alpha over the live world, never a backdrop-filter while the
+     world is being drawn - a full-screen blur is one of the few things a
+     phone GPU cannot absorb. See panel.frosted in screens.css for the one
+     place a blur is affordable. */
+  --panel:        rgba(247, 241, 227, 0.085);
+  --panel-solid:  rgba(18, 34, 46, 0.86);
+  --panel-edge:   rgba(246, 217, 138, 0.26);
+  --panel-edge-2: rgba(255, 255, 255, 0.10);
+  --scrim:        rgba(8, 14, 20, 0.58);
+
+  /* ---- type ------------------------------------------------------------ */
+  --f-display: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia,
+               "Times New Roman", serif;
+  --f-ui: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+          "Helvetica Neue", sans-serif;
+  --f-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* Fluid, but clamped at both ends: a 360px phone and a 27" monitor both
+     have to read, and vw-only scaling fails one of them every time. */
+  --t-hero:  clamp(34px, 8.5vw, 72px);
+  --t-title: clamp(23px, 5.2vw, 34px);
+  --t-body:  clamp(14px, 3.5vw, 16px);
+  --t-small: clamp(12px, 3vw, 13px);
+  --t-micro: 11px;
+
+  --track-wide: 0.38em;   /* the kicker letterspacing */
+  --track-ui:   0.14em;
+
+  /* ---- spacing: 4px base ---------------------------------------------- */
+  --s1: 4px;  --s2: 8px;  --s3: 12px; --s4: 16px;
+  --s5: 24px; --s6: 32px; --s7: 48px; --s8: 64px;
+
+  /* Safe areas, resolved once. Every fixed-position control adds these
+     rather than guessing at notches and home bars. */
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+
+  /* The smallest thing a thumb may be asked to hit. Apple says 44pt, and
+     the old sprint button was 66px of which the inner 40 read as pressable. */
+  --touch-min: 48px;
+
+  /* ---- shape ----------------------------------------------------------- */
+  --r-sm: 8px; --r-md: 14px; --r-lg: 22px; --r-pill: 999px;
+
+  /* ---- motion ---------------------------------------------------------- */
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-out-soft: cubic-bezier(0.16, 1, 0.3, 1);
+  --d-fast: 140ms;
+  --d-mid:  320ms;
+  --d-slow: 620ms;
+  --d-veil: 900ms;
+
+  /* ---- stacking: one ladder, no ad-hoc z-index anywhere else ---------- */
+  --z-frame: 5;
+  --z-hud: 6;
+  --z-controls: 8;
+  --z-veil: 10;
+  --z-modal: 20;
+  --z-toast: 30;
+  --z-diag: 40;
+}
+
+/* Someone who has asked their OS to stop animating things means it. Motion
+   here is decoration in every case, so all of it collapses to a crossfade
+   short enough not to register as movement. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --d-fast: 1ms; --d-mid: 1ms; --d-slow: 1ms; --d-veil: 120ms;
+  }
+}

@@ -2,13 +2,12 @@
    Extracted from the original single file. Logic unchanged. */
 
 import { audioIn, initAudio, updateAudio } from './audio.js';
-import { initTouch } from './touch.js';
 import { buildCharacter, animateCharacter } from './character.js';
 import { SUN, camera, clamp, clock, initEngine, renderer, scene, smoothstep, terrainHeight, timeU } from './core.js';
 import { buildCreatures, butterflies, updateCreatures } from './creatures.js';
 import { buildGrassGrid, fillGrassTile, grassMat, grassQueue, updateGrass } from './grass.js';
 import { buildMist, buildRainbow } from './particles.js';
-import { setTouchAPI, setPlaying, isTouchDevice, WALK, setReady, setStarted, P, bindInput, lockPointer, playerStart, playing, ready, started, updatePlayer } from './player.js';
+import { WALK, P, bindInput, playerStart, updatePlayer } from './player.js';
 import { applyPostFX, getLODScale, initQuality, updatePerfHUD, autoQuality, fsPass, onResize, rtScene, setupPost } from './post.js';
 import { useModelTrees, setPropLODScale, buildBridge, buildFlowers, buildGardenAccents, buildLandmarks, buildReeds, buildRocks, buildSunflowers, buildTrees, dumpLODReport, natureReady } from './props.js';
 import { buildActors, updateActors } from './actors.js';
@@ -16,12 +15,16 @@ import { buildClouds, buildSky, skyMesh } from './sky.js';
 import { buildVolcano } from './volcano.js';
 import { buildCliffWall, genTerrain } from './terrain.js';
 import { buildInlandWater, buildOcean, buildWaterfall, oceanMesh } from './water.js';
+/* The interface owns the boot card now, so this is a hand-off rather than a
+   pair of getElementById calls. Guarded because the world must still boot
+   (silently) if ui/ui.js failed to load - a missing progress bar is a far
+   better failure than a missing game. */
 function setProgress(msg, f) {
-  var el = document.getElementById('loadmsg');
-  if (el) { el.textContent = msg + '…'; }
-  var bar = document.querySelector('#bar > i');
-  if (bar) { bar.style.width = Math.round(clamp(f, 0, 1) * 100) + '%'; }
+  var U = window.MeadowUI;
+  if (U) { U.progress(msg, clamp(f, 0, 1)); }
 }
+
+function UI() { return window.MeadowUI; }
 
 function* boot() {
   yield ['Opening the sky', 0.01];
@@ -203,16 +206,27 @@ function exposeDebug() {
 }
 
 function onReady() {
-  setReady(true);
   exposeDebug();
-  document.getElementById('loading').classList.add('hidden');
-  document.getElementById('start').classList.remove('hidden');
-  /* draw one frame so the world is already there behind the title */
+
+  /* One frame drawn before the title card goes up, so the card arrives over
+     the meadow instead of over a gradient. The world was always being built
+     before the title appeared - it was just hidden behind an opaque veil, and
+     nobody ever saw the place they were about to walk into. */
   updatePlayer(0.0001);
   renderFrame(0);
-  setTouchAPI(initTouch({}));
+
   buildSelfBody();
   connectMultiplayer();
+
+  var U = UI();
+  if (U) {
+    /* Audio can only start from inside a real gesture handler, and these
+       events are dispatched synchronously from the click that caused them. */
+    U.on('enter', function () { initAudio(); audioIn(); });
+    U.on('resume', function () { audioIn(); });
+    U.ready();
+  }
+
   animate();
   maybeUseModelTrees();
 }
@@ -243,27 +257,64 @@ function renderFrame(dt) {
   var offx = Math.abs(_sunNDC.x), offy = Math.abs(_sunNDC.y);
   var amt = behind ? 0 : (1 - smoothstep(0.5, 1.6, Math.max(offx, offy))) * 0.18;   /* sun shafts were washing the beach out */
 
-  /* One call: on the LOW tier this skips bright-extract, god rays and both
-     blur passes and composites straight from the scene target - 4 of the 6
-     full-screen passes gone, which is where a weak GPU's time actually goes. */
+  /* One call: when the glow chain is off this skips bright-extract, god rays
+     and both blur passes and composites straight from the scene target - 4 of
+     the 6 full-screen passes gone, which is where a weak GPU's time actually
+     goes. */
   applyPostFX({ x: _sunNDC.x * 0.5 + 0.5, y: _sunNDC.y * 0.5 + 0.5 }, amt, fadeIn);
 }
 
 var tAcc = 0;
 
+/* ------------------------------------------------------------ title screen
+   The title card sits over the meadow rather than over a gradient - the world
+   was always built before the title appeared, it was just hidden under an
+   opaque veil, so nobody ever saw the place they were about to walk into.
+
+   But it is a MENU, and a menu must not run the GPU. An earlier version drew
+   the world continuously behind the title with the view drifting, capped to
+   20-30 Hz. That is still a full scene pass plus the whole post chain, for as
+   long as somebody leaves the page sitting there - which on a fanless laptop
+   is exactly the complaint it was meant to help.
+
+   So the world is drawn only while the opening fade is lifting - about two
+   seconds - and then the loop stops touching the GPU entirely. The canvas
+   keeps the last frame, which is the picture you want behind the title
+   anyway. One dawn, then stillness. */
+var idleAcc = 0;
+
+function idleFrame(dt) {
+  if (fadeIn <= 0) { return; }          /* the dawn is over: draw nothing more */
+
+  /* 30 Hz is plenty for a two-second crossfade and halves what it costs. */
+  idleAcc += dt;
+  if (idleAcc < 1 / 30) { return; }
+  var used = idleAcc;
+  idleAcc = 0;
+
+  fadeIn = Math.max(0, fadeIn - used * 0.55);
+  renderFrame(used);
+}
+
 function animate() {
   requestAnimationFrame(animate);
   var dt = clock.getDelta();
   if (dt > 0.06) { dt = 0.06; }
-  /* Nothing is drawn while a veil is up. Behind the title screen the frame
-     came out solid black anyway - the opening fade only lifts once you are
-     playing - so the phone was rendering the entire world, six full-screen
-     passes and all, to produce black underneath an opaque menu. Paused is
-     the same deal with a different picture: the canvas simply keeps the
-     last frame it drew, which is the world you were standing in.
-     The listener at the bottom of this file redraws once on resize, which
-     is the one case where a stale canvas would show through wrong. */
-  if (!playing) { return; }
+
+  var U = UI();
+  /* Nothing is drawn while a menu is up, with one deliberate exception.
+
+     PAUSED and SETTINGS draw nothing at all: the canvas simply keeps the last
+     frame it drew, which is the view you were standing in, and freezing it is
+     both prettier and free. It is also what makes the one blurred surface in
+     the interface affordable - see the note at the top of ui/ui.css.
+
+     TITLE is the exception, and idleRender() is how the interface says so. */
+  if (!U || !U.isPlaying()) {
+    if (U && U.idleRender()) { idleFrame(dt); }
+    return;
+  }
+
   tAcc += dt;
   timeU.value = tAcc;
   updatePlayer(dt);
@@ -273,18 +324,23 @@ function animate() {
   updateGrass(P.pos.x, P.pos.z, 1);
   updateCreatures(tAcc, P.pos.x, P.pos.z);
   updateActors(dt, P.pos.x, P.pos.z);
+  /* The opening fade is already spent on the title screen, so by the time
+     anyone is playing this is almost always zero and autoQuality() has the
+     frame to itself. The guard stays for the one case that skips the title:
+     a reload straight into play from a debug hook. */
   if (fadeIn > 0) { fadeIn = Math.max(0, fadeIn - dt * 0.75); }
   else { autoQuality(dt); }
   renderFrame(dt);
 }
 
-/* The one case a frozen canvas gets it wrong: turning the phone, or
-   resizing the window, while paused or on the title screen. post.js has
-   already rebuilt its buffers by the time this runs (player.js registers
-   that listener first, during bindInput), so one frame here is enough to
-   refill a canvas that would otherwise be stretched or blank. */
+/* The one case a frozen canvas gets it wrong: turning the phone, or resizing
+   the window, while paused or on the title screen. post.js has already
+   rebuilt its buffers by the time this runs (player.js registers that
+   listener first, during bindInput), so one frame here is enough to refill a
+   canvas that would otherwise be stretched or blank. */
 window.addEventListener('resize', function () {
-  if (ready && !playing) { renderFrame(0); }
+  var U = UI();
+  if (P.pos && U && !U.isPlaying() && U.state() !== 'boot') { renderFrame(0); }
 });
 
 /* ======================================================================== *
@@ -294,14 +350,19 @@ window.__startWorld = function () {
   try {
     initEngine();
   } catch (err) {
-    document.getElementById('loadmsg').textContent =
-      'This browser could not start WebGL. Try Chrome, Edge or Firefox.';
+    var U = UI();
+    var msg = 'This browser could not start WebGL. Try Chrome, Edge or Firefox.';
+    if (U) { U.failed(msg); }
     return;
   }
   _sunNDC = new THREE.Vector3();
   /* MUST run before runBoot(): buildGrassGrid() inside boot() reads the
      quality tier to size the grass ring, and that is baked in at build time.
-     Called after boot it would have no effect on grass at all. */
+     Called after boot it would have no effect on grass at all.
+
+     initQuality() also registers the settings listener that applies quality,
+     resolution, glow and field of view live - so a stored preference from a
+     previous visit is in force before the first tree is planted. */
   initQuality();
   /* MUST be between initQuality() and runBoot(). initQuality() is what
      decides which tier this device is on, and runBoot() is what plants the
@@ -312,25 +373,10 @@ window.__startWorld = function () {
   bindInput();
   runBoot();
 
-  function enter() {
-    if (!ready) { return; }
-    if (!started) { setStarted(true); initAudio(); }
-    audioIn();
-    if (isTouchDevice()) {
-      /* no pointer lock on a phone - just start */
-      setPlaying(true);
-      document.getElementById('frame').classList.add('on');
-    } else {
-      lockPointer();
-    }
-    document.getElementById('start').classList.add('hidden');
-    document.getElementById('paused').classList.add('hidden');
-  }
-  document.getElementById('enter').addEventListener('click', enter);
-  document.getElementById('resume').addEventListener('click', enter);
-  document.addEventListener('click', function () {
-    if (started && !playing) { enter(); }
-  });
+  /* Entering, resuming, pausing and the settings panel all belong to
+     ui/ui.js now. There is no document-wide click handler here any more: on a
+     phone that handler meant ANY stray tap resumed play, including the one
+     that was aiming for a button. */
 };
 
-export { _sunNDC, animate, boot, fadeIn, onReady, renderFrame, runBoot, setProgress, tAcc };
+export { _sunNDC, animate, boot, fadeIn, idleFrame, onReady, renderFrame, runBoot, setProgress, tAcc };

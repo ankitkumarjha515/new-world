@@ -6,6 +6,41 @@ var actx = null, aMaster = null, aWind = null, aFall = null, aSea = null, aNoise
 
 var chirpIn = 2.5, stepPhase = 0;
 
+/* The level audioIn() ramps up to, reached by ear long before there was a
+   volume slider. The slider is a multiplier on it rather than a replacement,
+   so 100% still means the balance everything else was mixed against. */
+var FULL_GAIN = 0.62;
+
+function volumeScale() {
+  var S = window.MeadowSettings;
+  var v = S ? S.volume() : 1;
+  return (typeof v === 'number' && isFinite(v)) ? clamp(v, 0, 1) : 1;
+}
+
+/* The target master gain right now. Floored just above zero because the ramp
+   below is exponential, and an exponential ramp to exactly 0 is undefined -
+   in practice it throws or silently does nothing depending on the browser. */
+function targetGain() {
+  return Math.max(0.0001, FULL_GAIN * volumeScale());
+}
+
+/* Applied immediately when the slider moves, with a short ramp so dragging it
+   does not click. Registered once, lazily, from initAudio(). */
+function bindVolume() {
+  var S = window.MeadowSettings;
+  if (!S) { return; }
+  S.onChange(function (st, key) {
+    if (key !== null && key !== 'volume') { return; }
+    if (!actx || !aMaster) { return; }
+    try {
+      var t = actx.currentTime;
+      aMaster.gain.cancelScheduledValues(t);
+      aMaster.gain.setValueAtTime(Math.max(0.0001, aMaster.gain.value), t);
+      aMaster.gain.exponentialRampToValueAtTime(targetGain(), t + 0.12);
+    } catch (e) { /* a browser that dislikes the ramp is not worth throwing over */ }
+  });
+}
+
 function initAudio() {
   try {
     var AC = window.AudioContext || window.webkitAudioContext;
@@ -35,6 +70,7 @@ function initAudio() {
     var sg = actx.createGain(); sg.gain.value = 300;
     sl.connect(sg); sg.connect(sf.frequency); sl.start();
     src().connect(sf); sf.connect(aSea); aSea.connect(aMaster);
+    bindVolume();
   } catch (e) { actx = null; }
 }
 
@@ -44,7 +80,7 @@ function audioIn() {
   try {
     aMaster.gain.cancelScheduledValues(actx.currentTime);
     aMaster.gain.setValueAtTime(Math.max(0.0001, aMaster.gain.value), actx.currentTime);
-    aMaster.gain.exponentialRampToValueAtTime(0.62, actx.currentTime + 2.4);
+    aMaster.gain.exponentialRampToValueAtTime(targetGain(), actx.currentTime + 2.4);
   } catch (e) { }
 }
 
@@ -98,4 +134,4 @@ function updateAudio(dt, px, py, pz) {
  *  THE PLAYER
  * ======================================================================== */
 
-export { aFall, aMaster, aNoiseBuf, aSea, aWind, actx, audioIn, chirp, chirpIn, footstep, initAudio, stepPhase, updateAudio };
+export { FULL_GAIN, targetGain, aFall, aMaster, aNoiseBuf, aSea, aWind, actx, audioIn, chirp, chirpIn, footstep, initAudio, stepPhase, updateAudio };

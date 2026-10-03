@@ -222,12 +222,40 @@ function terrainColorAt(x, z, h, ny, out, o) {
       var br = lerp(0.062, 0.148, ash);
       var bg = lerp(0.052, 0.126, ash);
       var bb = lerp(0.058, 0.128, ash);
-      /* ash and pumice catch on the flatter ledges */
+      /* Ash and pumice catch on the flatter ledges. Pushed from 0.5 to 0.72,
+         because at half strength the cone read as one flat black silhouette
+         with lava drawn on it - there was nothing in the rock itself to show
+         which way a surface was facing. The ash is the only thing giving the
+         flanks their form, so it has to be allowed to register. */
       var ledge = smoothstep(0.55, 0.18, slope) * smoothstep(0.42, 0.72, ash);
-      br = lerp(br, 0.245, ledge * 0.5); bg = lerp(bg, 0.232, ledge * 0.5); bb = lerp(bb, 0.228, ledge * 0.5);
+      br = lerp(br, 0.255, ledge * 0.72); bg = lerp(bg, 0.242, ledge * 0.72); bb = lerp(bb, 0.238, ledge * 0.72);
       /* scorched red-brown near the vent */
       var scorch = smoothstep(0.55, 1.0, smoothstep(VOLC.r * 0.58, VOLC.r * 0.10, vdist));
-      br = lerp(br, 0.285, scorch * 0.62); bg = lerp(bg, 0.118, scorch * 0.62); bb = lerp(bb, 0.062, scorch * 0.62);
+      /* Pulled back from 0.62 to 0.40 and taken redder. At full strength,
+         with the glow chain lifting it again afterwards, the whole upper cone
+         arrived as terracotta - a pot, not a mountain. Scorch should tint the
+         rock, not replace it. */
+      br = lerp(br, 0.232, scorch * 0.40); bg = lerp(bg, 0.094, scorch * 0.40); bb = lerp(bb, 0.058, scorch * 0.40);
+
+      /* THE FRINGE, and it is the fix for the ugliest band on the mountain.
+         `volc` crossfades meadow green straight into basalt, and halfway
+         across that fade the colour is the average of a bright yellow-green
+         and a near-black - which is olive mud. It ran as a wide smeared
+         ring right where the eye looks for the treeline, and it read as dirt
+         smudged over grass rather than as a boundary.
+
+         Nothing in nature fades grass to rock. It goes through dead grass,
+         scrub and ash first, so that is what goes here: a dry ochre weighted
+         to the MIDDLE of the transition (4*v*(1-v) peaks at v = 0.5 and is
+         zero at both ends), applied to the meadow colour before the basalt
+         mix. Grass to straw to cinder, which is three readable steps instead
+         of one muddy one, and it suits a palette already built on banded
+         light. Well under the 0.72 albedo ceiling in DESIGN-AGENT.md. */
+      var fringe = volc * (1 - volc) * 4;
+      r = lerp(r, 0.405, fringe * 0.58);
+      g = lerp(g, 0.306, fringe * 0.58);
+      b = lerp(b, 0.165, fringe * 0.58);
+
       r = lerp(r, br, volc); g = lerp(g, bg, volc); b = lerp(b, bb, volc);
     }
   }
@@ -311,15 +339,53 @@ var LAVA_GLSL = [
   ' vec3 _lavaCol = vec3(0.0); float _lava = 0.0, _halo = 0.0;',
   ' if (vVolc > 0.002) {',
   '   vec2 _dir = _vd / _vr;',
-  /* the slow crawl downhill: the pattern is dragged along the radius over
-     time, so the channels creep outward instead of shimmering in place */
-  '   float _flow = uTime * 0.014;',
-  '   float _n1 = _gn(_dir * 5.6 + vec2(_vr * 0.0115 - _flow, _vr * 0.0082 + 11.0));',
-  '   float _n2 = _gn(_dir * 12.0 + vec2(_vr * 0.0210 - _flow * 2.1, _vr * 0.0090 + 31.0));',
-  '   float _wide = mix(8.5, 3.6, clamp(_vr / ' + VOLC.r.toFixed(1) + ', 0.0, 1.0));',
+  '   float _t = clamp(_vr / ' + VOLC.r.toFixed(1) + ', 0.0, 1.0);',
+  /* THE SAMPLE COORDINATE IS THE WHOLE TRICK, and the previous version threw
+     it away again two lines later.
+
+     Sampling on _dir alone is what makes radial streaks: _dir is constant
+     along any radius, so one noise lookup becomes lines running from the
+     summit straight down the fall line. The old code then ADDED _vr * 0.0115
+     and _vr * 0.0082 to the two noise axes - and over a 360-unit cone that is
+     an offset of 4.1 and 3.0 against a _dir term spanning only -5.6 to 5.6.
+     The radial drift was comparable to the signal, so a channel wandered
+     sideways as it descended, crossed its neighbours and in places curled
+     back on itself. Lava does not flow uphill, and a closed orange loop on
+     the flank was the first thing anybody noticed about this mountain.
+
+     A lean is still wanted - a ruler-straight channel looks machined - so it
+     is applied as a small TANGENTIAL rotation of the sample direction that
+     grows with radius. The streak stays a streak and merely curves. At its
+     strongest this is about fifteen degrees across the whole flank. */
+  '   float _wob = (_gn(_dir * 2.1 + 7.3) - 0.5) * _t * 0.55;',
+  '   vec2 _sd = _dir + vec2(-_dir.y, _dir.x) * _wob;',
+  '   float _n1 = _gn(_sd * 5.6 + vec2(0.0, 11.0));',
+  '   float _n2 = _gn(_sd * 12.6 + vec2(0.0, 31.0));',
+  /* Width, and this was backwards. A higher exponent keeps only the floor of
+     the crease, so a HIGH exponent is a NARROW channel. The old mix ran 8.5
+     at the vent to 3.6 at the foot - narrow where the lava leaves the crater
+     and widest where it has run out of heat, which is the opposite of how a
+     flow behaves and is why the channels bloomed into orange blobs across the
+     lower slope.
+
+     But the first correction of it went too far the other way: an exponent of
+     4 at the vent made the creases so broad that every channel merged into
+     its neighbours and the top third of the cone came out as one smooth
+     terracotta wash - worse to look at than the wrong-shaped lines it
+     replaced, because at least those were lines. The channel has to stay
+     NARROW at both ends; what widens near the crater is the vent pool below,
+     which is its own term. This only tapers. */
+  '   float _wide = mix(8.0, 12.5, _t);',
   '   float _c1 = pow(1.0 - abs(_n1 * 2.0 - 1.0), _wide);',
-  '   float _c2 = pow(1.0 - abs(_n2 * 2.0 - 1.0), _wide * 1.7);',
-  '   float _chan = max(_c1, _c2 * 0.70);',
+  '   float _c2 = pow(1.0 - abs(_n2 * 2.0 - 1.0), _wide * 1.8);',
+  '   float _chan = max(_c1, _c2 * 0.62);',
+  /* The crawl, which used to be done by dragging the whole pattern and was
+     therefore the same thing that bent the channels. Now the SHAPE is fixed
+     and only the BRIGHTNESS travels: a slow wave running down the radius, so
+     surges of hotter rock move from the crater toward the foot along channels
+     that do not themselves move. Offsetting its phase by _n1 keeps the
+     neighbouring channels from pulsing in unison. */
+  '   _chan *= 0.72 + 0.28 * sin(_vr * 0.055 - uTime * 0.85 + _n1 * 7.0);',
   /* Fade the channels out toward the foot, on the same RADIUS the basalt
      uses rather than on height - a height cutoff drew a level line across
      the cone. They are allowed to reach further down than the bare rock
@@ -336,7 +402,7 @@ var LAVA_GLSL = [
      river is lit BY the river. One extra smoothstep on noise we already
      have, and it is most of what sells the glow as light rather than as
      paint. */
-  '   _halo = smoothstep(0.62, 1.0, 1.0 - abs(_n1 * 2.0 - 1.0)) * _hm * vVolc * 0.55;',
+  '   _halo = smoothstep(0.76, 1.0, 1.0 - abs(_n1 * 2.0 - 1.0)) * _hm * vVolc * 0.40;',
   '   _halo = max(_halo, _vent * vVolc * 0.7);',
   /* crust: cooling black skin, splitting to show white-hot rock beneath */
   '   float _core = smoothstep(0.20, 0.92, _lava);',
