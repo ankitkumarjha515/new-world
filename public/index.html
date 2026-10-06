@@ -11,7 +11,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#f3ecdd">
+<meta name="theme-color" content="#0d1620">
 <meta name="description" content="A hand-painted procedural open world you can walk around in. No install, no account.">
 <title>Whispering Meadow</title>
 
@@ -19,15 +19,6 @@
      plain CSS and they are what paints the title card. The 3D engine below
      is loaded after, and asynchronously, so the first frame a phone shows
      does not wait on a megabyte of Three.js. -->
-<!-- Type: Inter for the interface, Newsreader for the printed cards,
-     JetBrains Mono for labels. media=print + onload is the non-blocking
-     stylesheet idiom - the boot card paints in system fonts at once and
-     swaps when these land, and nothing breaks if they never do. -->
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" media="print" onload="this.media='all'"
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap">
-
 <link rel="stylesheet" href="/ui/tokens.css">
 <link rel="stylesheet" href="/ui/ui.css">
 
@@ -49,8 +40,8 @@
      because it is the only thing anybody sees during boot. -->
 <div class="screen opaque on" id="screen-boot">
   <div class="card">
-    <h1 class="wordmark wordmark-xl"><b>whispering</b>meadow<span>.world</span></h1>
     <div class="kicker">A place that does not exist</div>
+    <h1 class="hero">Whispering <em>Meadow</em></h1>
     <div id="boot-bar"><i></i></div>
     <div id="boot-msg">Growing the world&hellip;</div>
   </div>

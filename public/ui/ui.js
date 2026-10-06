@@ -43,7 +43,7 @@ var hasPlayed = false;            /* has the player entered the world at least o
 var root = null;
 var screens = {};
 var topRight = null;
-var fullBtn = null, pauseBtn = null, nameBtn = null;
+var fullBtn = null, pauseBtn = null;
 var input = null;
 
 var listeners = {};
@@ -113,9 +113,7 @@ function syncTopRight() {
   var showFull = state !== STATE.SETTINGS && !(playing && !touch);
   fullBtn.style.display = showFull ? '' : 'none';
 
-  /* Boot has its own card, and the settings sheet is the thing the name
-     pill opens - nothing to show over either. */
-  topRight.classList.toggle('hide', state === STATE.BOOT || state === STATE.SETTINGS);
+  topRight.classList.toggle('hide', !showFull && pauseBtn.style.display === 'none');
 }
 
 function setState(next) {
@@ -131,7 +129,6 @@ function setState(next) {
   showScreen(state);
 
   var playing = state === STATE.PLAYING;
-  hud.setScreen(state);
   hud.show(playing);
   if (input) { input.setActive(playing); }
   var frame = document.getElementById('frame');
@@ -216,40 +213,9 @@ function buildTopRight() {
   pauseBtn = iconBtn('btn-pause', 'pause', 'Pause');
   fullBtn = iconBtn('btn-fullscreen', 'expand', 'Full screen');
 
-  /* The name pill. It is who other people see you as, and tapping it opens
-     settings, which is where that name is changed. */
-  nameBtn = document.createElement('button');
-  nameBtn.type = 'button';
-  nameBtn.id = 'btn-name';
-  nameBtn.className = 'pill';
-  nameBtn.setAttribute('aria-label', 'Your name and settings');
-  nameBtn.title = 'Settings';
-
   topRight.appendChild(pauseBtn);
   topRight.appendChild(fullBtn);
-  topRight.appendChild(nameBtn);
   root.appendChild(topRight);
-
-  function syncName() {
-    var S = window.MeadowSettings;
-    var n = (S && S.get().name) || 'walker';
-    var span = document.createElement('span');
-    span.textContent = '@' + n.toLowerCase().replace(/\s+/g, '');
-    nameBtn.innerHTML = icon('user');
-    nameBtn.appendChild(span);
-    nameBtn.insertAdjacentHTML('beforeend', icon('chevron'));
-  }
-  syncName();
-  if (window.MeadowSettings) {
-    window.MeadowSettings.onChange(function (s, key) {
-      if (key === null || key === 'name') { syncName(); }
-    });
-  }
-
-  nameBtn.addEventListener('click', function (e) {
-    e.preventDefault(); e.stopPropagation();
-    openSettings();
-  });
 
   pauseBtn.addEventListener('click', function (e) {
     e.preventDefault(); e.stopPropagation();
@@ -379,8 +345,6 @@ function bindSettingsEvents() {
 function init() {
   root = document.createElement('div');
   root.id = 'ui';
-  /* For stylesheets: the sound card steps out of the way of the thumbs. */
-  document.body.classList.toggle('is-touch', isTouchDevice());
   document.body.appendChild(root);
 
   screens.boot = buildBoot(root);

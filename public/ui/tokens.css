@@ -24,23 +24,6 @@
   --c-teal:       #123043;
   --c-teal-deep:  #0d1620;   /* page background, matches theme-color */
 
-  /* The paper-and-ink set. Menus are printed things - a ticket, a field
-     card - laid over the world rather than glass panes floating in it. */
-  --c-sheet:      #f6f1e6;   /* card stock */
-  --c-sheet-2:    #ece5d6;   /* recessed areas on the card */
-  --c-rule:       rgba(26, 37, 65, 0.14);
-  --c-navy:       #1b2644;   /* the primary button */
-  --c-navy-2:     #2b3a63;
-  --c-grass:      #3e8a4c;   /* the "do it" green */
-  --c-grass-2:    #57a764;
-  --c-coral:      #e4574a;   /* small live dots, the record light */
-  --c-muted:      #6d7183;
-
-  /* Over-the-world chrome: dark, translucent, NO blur (see ui.css). */
-  --chrome:       rgba(22, 26, 32, 0.40);
-  --chrome-hi:    rgba(22, 26, 32, 0.58);
-  --chrome-edge:  rgba(255, 255, 255, 0.20);
-
   /* Panels. Alpha over the live world, never a backdrop-filter while the
      world is being drawn - a full-screen blur is one of the few things a
      phone GPU cannot absorb. See panel.frosted in screens.css for the one
@@ -52,17 +35,11 @@
   --scrim:        rgba(8, 14, 20, 0.58);
 
   /* ---- type ------------------------------------------------------------ */
-  --f-display: "Newsreader", "Iowan Old Style", "Palatino Linotype", Palatino, Georgia,
+  --f-display: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia,
                "Times New Roman", serif;
-  --f-ui: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+  --f-ui: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
           "Helvetica Neue", sans-serif;
-  --f-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  /* Loaded from Google Fonts without blocking paint (index.html). Until they
-     arrive - or if they never do - the system stacks behind them stand in. */
-  --f-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
-            Roboto, "Helvetica Neue", sans-serif;
-  --f-serif: "Newsreader", "Iowan Old Style", "Palatino Linotype", Palatino,
-             Georgia, serif;
+  --f-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
   /* Fluid, but clamped at both ends: a 360px phone and a 27" monitor both
      have to read, and vw-only scaling fails one of them every time. */

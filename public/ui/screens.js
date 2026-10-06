@@ -136,8 +136,8 @@ function buildBoot(root) {
     s.id = 'screen-boot';
     s.innerHTML =
       '<div class="card">' +
-        '<h1 class="wordmark wordmark-xl"><b>whispering</b>meadow<span>.world</span></h1>' +
         '<div class="kicker">A place that does not exist</div>' +
+        '<h1 class="hero">Whispering <em>Meadow</em></h1>' +
         '<div id="boot-bar"><i></i></div>' +
         '<div id="boot-msg">Growing the world&hellip;</div>' +
       '</div>';
@@ -164,37 +164,33 @@ function buildTitle(root) {
 
   var legend = touch
     ? '<div class="keys">' +
-        '<span><b>left</b> walk</span>' +
-        '<span><b>drag</b> look</span>' +
-        '<span><b>double-tap</b> run</span>' +
-        '<span><b>jump</b> hop</span>' +
+        '<span><b>Left</b> walk</span>' +
+        '<span><b>Drag</b> look</span>' +
+        '<span><b>Double-tap</b> run</span>' +
+        '<span><b>Jump</b> hop</span>' +
       '</div>'
     : '<div class="keys">' +
-        '<span><b>wasd</b> walk</span>' +
-        '<span><b>mouse</b> look</span>' +
-        '<span><b>shift</b> run</span>' +
-        '<span><b>space</b> jump</span>' +
-        '<span><b>esc</b> pause</span>' +
+        '<span><b>W A S D</b> walk</span>' +
+        '<span><b>Mouse</b> look</span>' +
+        '<span><b>Shift</b> run</span>' +
+        '<span><b>Space</b> jump</span>' +
+        '<span><b>Esc</b> pause</span>' +
       '</div>';
 
   var hint = touch
-    ? 'Headphones if you have them &middot; either orientation works'
-    : 'Best with headphones &middot; click to capture the mouse';
+    ? 'Headphones if you have them &middot; turn the phone either way, both work'
+    : 'Best with headphones &middot; click the page to capture the mouse';
 
-  /* A printed ticket rather than a glass panel: a stub with a perforation,
-     a serif line you could read aloud, and one obvious way in. */
   s.innerHTML =
-    '<div class="card ticket">' +
-      '<div class="ticket-head"><span>Walk &#8470; 01</span><span>~&infin; min &middot; outside only</span></div>' +
-      '<div class="ticket-perf" aria-hidden="true"></div>' +
-      '<h1 class="ticket-title">Walk somewhere quiet.<br>Stay as long as you like.</h1>' +
-      '<p class="ticket-whisper">' + icon('cloud') +
-        '<span>the meadow asked: &ldquo;When did you last look up?&rdquo;</span></p>' +
-      '<p class="ticket-note">Sunflowers east &middot; a waterfall north &middot; a warm sea downriver</p>' +
+    '<div class="card">' +
+      '<div class="kicker">Walk anywhere. Stay as long as you like.</div>' +
+      '<h1 class="hero">Whispering <em>Meadow</em></h1>' +
+      '<p class="lede">Sunflowers to the east, a waterfall in the north cliffs, ' +
+         'and a warm sea at the end of the river. The wind never quite stops.</p>' +
       legend +
       '<div class="btn-row">' +
-        '<button type="button" class="btn btn-primary" id="btn-enter">Step outside ' + icon('arrow') + '</button>' +
-        '<button type="button" class="btn btn-ghost" id="btn-title-settings">' + icon('gear') + ' settings</button>' +
+        '<button type="button" class="btn btn-primary" id="btn-enter">Step outside</button>' +
+        '<button type="button" class="btn btn-ghost" id="btn-title-settings">Settings</button>' +
       '</div>' +
       '<div class="hint">' + hint + '</div>' +
     '</div>';
@@ -218,13 +214,12 @@ function buildPause(root) {
   var s = el('div', 'screen veiled');
   s.id = 'screen-pause';
   s.innerHTML =
-    '<div class="card ticket ticket-sm">' +
-      '<div class="ticket-head"><span>Paused</span><span>the wind is holding its breath</span></div>' +
-      '<div class="ticket-perf" aria-hidden="true"></div>' +
-      '<h1 class="ticket-title">Still here.<br>Whenever you are ready.</h1>' +
+    '<div class="card">' +
+      '<div class="kicker">The wind is holding its breath</div>' +
+      '<h1 class="hero">Paused</h1>' +
       '<div class="btn-row">' +
-        '<button type="button" class="btn btn-primary" id="btn-resume">Back to the meadow ' + icon('arrow') + '</button>' +
-        '<button type="button" class="btn btn-ghost" id="btn-pause-settings">' + icon('gear') + ' settings</button>' +
+        '<button type="button" class="btn btn-primary" id="btn-resume">Return to the meadow</button>' +
+        '<button type="button" class="btn btn-ghost" id="btn-pause-settings">Settings</button>' +
       '</div>' +
     '</div>';
   root.appendChild(s);
@@ -246,7 +241,7 @@ function buildSettings(root) {
 
   var sheet = el('div', 'sheet');
   var head = el('div', 'sheet-head');
-  head.appendChild(el('h2', null, 'Settings'));
+  head.appendChild(el('h2', null, '<em>Settings</em>'));
   var closeBtn = iconBtn('btn-settings-close', 'close', 'Close settings');
   head.appendChild(closeBtn);
   sheet.appendChild(head);

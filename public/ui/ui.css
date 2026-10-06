@@ -26,7 +26,7 @@ html, body {
   overflow: hidden;
   background: var(--c-teal-deep);
   color: var(--c-cream);
-  font-family: var(--f-ui);
+  font-family: var(--f-display);
   -webkit-font-smoothing: antialiased;
   -webkit-text-size-adjust: 100%;
   /* Stops the whole page rubber-banding under a thumb drag on iOS, which
@@ -64,25 +64,24 @@ html, body {
 }
 .screen.on { opacity: 1; visibility: visible; }
 
-/* Only the boot screen is opaque: warm card stock with a little sun in it,
-   the same paper the menus are printed on. */
+/* Only the boot screen is opaque. Title and pause let the meadow through,
+   which is the whole point of having built a world. */
 .screen.opaque {
-  color: var(--c-navy);
   background:
-    radial-gradient(70% 55% at 50% 38%, rgba(255, 236, 196, 0.85), rgba(255, 236, 196, 0) 70%),
-    radial-gradient(120% 80% at 50% 120%, rgba(214, 196, 160, 0.55), rgba(0, 0, 0, 0) 60%),
-    linear-gradient(180deg, #f3ecdd 0%, #efe6d3 100%);
+    radial-gradient(120% 90% at 50% 6%,  rgba(140, 196, 232, 0.30), rgba(0,0,0,0) 62%),
+    radial-gradient(90%  70% at 50% 108%, rgba(244, 203, 110, 0.26), rgba(0,0,0,0) 60%),
+    linear-gradient(178deg, #16283c 0%, #1d3b4f 18%, #1b3346 42%, #123043 100%);
 }
 
-/* Over the live world: a light top-and-bottom scrim so the chrome reads,
-   with the middle left for the picture. The cards carry their own ground. */
+/* Over the live world: a gradient scrim top and bottom so text stays legible
+   against whatever happens to be behind it, with the middle left clear. */
 .screen.veiled {
   background:
     linear-gradient(180deg,
-      rgba(9, 14, 20, 0.40) 0%,
-      rgba(9, 14, 20, 0.08) 26%,
-      rgba(9, 14, 20, 0.08) 70%,
-      rgba(9, 14, 20, 0.46) 100%);
+      rgba(9, 18, 26, 0.72) 0%,
+      rgba(9, 18, 26, 0.30) 34%,
+      rgba(9, 18, 26, 0.26) 62%,
+      rgba(9, 18, 26, 0.80) 100%);
 }
 
 .card {
@@ -99,132 +98,59 @@ html, body {
 .screen.on .card { transform: none; opacity: 1; }
 
 .kicker {
-  font-family: var(--f-mono);
+  font-family: var(--f-ui);
   font-size: var(--t-micro);
-  font-weight: 500;
-  letter-spacing: var(--track-ui);
+  font-weight: 600;
+  letter-spacing: var(--track-wide);
   text-transform: uppercase;
   opacity: 0.6;
-  margin-top: var(--s3);
+  margin-bottom: var(--s5);
 }
 
-/* ---- wordmark: bold half, light half, a quiet suffix ------------------ */
-.wordmark {
+.hero {
   margin: 0;
-  font-family: var(--f-sans);
-  font-size: 19px;
-  font-weight: 500;
-  letter-spacing: -0.03em;
-  line-height: 1;
-  white-space: nowrap;
-}
-.wordmark b { font-weight: 800; }
-.wordmark span { font-weight: 400; opacity: 0.55; }
-.wordmark-xl { font-size: clamp(30px, 7vw, 54px); }
-
-/* ==========================================================================
-   Ticket - the printed card the title and pause screens are made of
-   ========================================================================== */
-.ticket {
-  position: relative;
-  max-width: 440px;
-  padding: var(--s4) var(--s5) var(--s5);
-  text-align: left;
-  color: var(--c-navy);
-  background: var(--c-sheet);
-  border-radius: var(--r-md);
-  /* A static shadow, so the card sits ON the world. Never animated. */
-  box-shadow: 0 30px 60px -24px rgba(0, 0, 0, 0.55),
-              0 2px 0 rgba(255, 255, 255, 0.6) inset;
-  transform: translateY(14px) rotate(-1.2deg);
-}
-.screen.on .ticket { transform: rotate(-0.6deg); }
-.ticket-sm { max-width: 400px; }
-
-.ticket-head {
-  display: flex; justify-content: space-between; gap: var(--s3);
-  font-family: var(--f-mono);
-  font-size: var(--t-micro);
-  font-weight: 500;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--c-muted);
-}
-
-/* The perforation: a dashed rule with a punched notch at each end. The
-   notches are circles in the page colour of whatever is behind - which over
-   a live world means dark, so they read as holes. */
-.ticket-perf {
-  position: relative;
-  height: 1px;
-  margin: var(--s3) calc(-1 * var(--s5)) var(--s5);
-  background-image: linear-gradient(90deg, var(--c-rule) 55%, transparent 0);
-  background-size: 9px 1px;
-}
-.ticket-perf::before, .ticket-perf::after {
-  content: "";
-  position: absolute; top: -8px;
-  width: 16px; height: 16px;
-  border-radius: 50%;
-  background: #23282a;
-}
-.ticket-perf::before { left: -8px; }
-.ticket-perf::after { right: -8px; }
-
-.ticket-title {
-  margin: 0;
-  font-family: var(--f-serif);
-  font-size: clamp(24px, 5.4vw, 30px);
+  font-size: var(--t-hero);
   font-weight: 400;
-  line-height: 1.15;
-  letter-spacing: -0.012em;
+  line-height: 1.02;
+  text-shadow: 0 2px 40px rgba(0, 0, 0, 0.55);
 }
+.hero em { font-style: italic; color: var(--c-gold); }
 
-.ticket-whisper {
-  display: flex; align-items: center; gap: var(--s2);
-  margin: var(--s4) 0 0;
-  font-family: var(--f-serif);
-  font-style: italic;
+.lede {
+  margin: var(--s4) auto 0;
+  max-width: 42ch;
   font-size: var(--t-body);
-  color: var(--c-navy-2);
+  line-height: 1.7;
+  font-style: italic;
+  opacity: 0.8;
 }
-.ticket-whisper svg { width: 17px; height: 17px; flex: 0 0 auto; opacity: 0.7; }
-
-.ticket-note {
-  margin: var(--s2) 0 0;
-  font-family: var(--f-mono);
-  font-size: 10.5px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--c-muted);
-}
-
-.ticket .btn-row { justify-content: flex-start; margin-top: var(--s5); }
-.ticket .hint { text-align: left; color: var(--c-muted); opacity: 0.9; }
 
 .hint {
-  margin-top: var(--s4);
-  font-family: var(--f-mono);
-  font-size: 10.5px;
-  letter-spacing: 0.04em;
-  opacity: 0.5;
+  margin-top: var(--s5);
+  font-family: var(--f-ui);
+  font-size: var(--t-micro);
+  letter-spacing: 0.05em;
+  opacity: 0.42;
 }
 
-/* ---- keycap legend ------------------------------------------------------ */
+/* ---- keycap legend (desktop only) ------------------------------------- */
 .keys {
-  margin: var(--s4) 0 0;
-  display: flex; flex-wrap: wrap; gap: 6px;
-  font-family: var(--f-mono);
+  margin: var(--s6) auto 0;
+  display: flex; flex-wrap: wrap; gap: var(--s2) var(--s3);
+  justify-content: center;
+  max-width: 460px;
+  font-family: var(--f-ui);
 }
 .keys span {
-  font-size: 10.5px;
-  letter-spacing: 0.04em;
-  padding: 4px 9px;
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
+  padding: 7px 12px;
   border-radius: var(--r-pill);
-  background: var(--c-sheet-2);
-  color: var(--c-navy-2);
+  background: rgba(255, 255, 255, 0.075);
+  border: 1px solid var(--panel-edge-2);
+  opacity: 0.86;
 }
-.keys b { font-weight: 600; color: var(--c-navy); text-transform: uppercase; }
+.keys b { font-weight: 700; color: var(--c-gold); }
 
 /* ==========================================================================
    Buttons
@@ -233,126 +159,100 @@ html, body {
   display: inline-flex; align-items: center; justify-content: center;
   gap: var(--s2);
   min-height: var(--touch-min);
-  padding: 0 var(--s5);
+  padding: 0 var(--s6);
   border: 0; margin: 0;
   border-radius: var(--r-pill);
-  font-family: var(--f-sans);
-  font-size: 14.5px;
-  font-weight: 600;
-  letter-spacing: -0.005em;
+  font-family: var(--f-ui);
+  font-size: var(--t-small);
+  font-weight: 700;
+  letter-spacing: var(--track-ui);
+  text-transform: uppercase;
   cursor: pointer;
   user-select: none; -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;
   transition: transform var(--d-fast) var(--ease),
+              box-shadow var(--d-fast) var(--ease),
               background-color var(--d-fast) var(--ease);
 }
-.btn svg { width: 16px; height: 16px; flex: 0 0 auto; }
 .btn:focus-visible {
-  outline: 2px solid var(--c-grass-2);
+  outline: 2px solid var(--c-mint);
   outline-offset: 3px;
 }
 
-/* Ink-navy, as in the reference. */
 .btn-primary {
-  color: #fff;
-  background: var(--c-navy);
-  box-shadow: 0 10px 22px -12px rgba(27, 38, 68, 0.9);
+  margin-top: var(--s6);
+  padding: 0 var(--s7);
+  color: var(--c-teal);
+  background: linear-gradient(180deg, #ffe9ad, var(--c-gold-deep));
+  box-shadow: 0 12px 40px -12px rgba(246, 217, 138, 0.80),
+              inset 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 /* Hover only where a pointer can actually hover. On a phone :hover sticks
    after a tap and leaves the button looking permanently pressed. */
 @media (hover: hover) and (pointer: fine) {
-  .btn-primary:hover { background: var(--c-navy-2); transform: translateY(-1px); }
-  .btn-primary:hover svg { transform: translateX(2px); }
+  .btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 20px 52px -14px rgba(246, 217, 138, 0.95),
+                inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  }
 }
-.btn-primary svg { transition: transform var(--d-fast) var(--ease); }
-.btn-primary:active { transform: scale(0.98); }
+.btn-primary:active { transform: translateY(0) scale(0.985); }
 
 .btn-ghost {
-  color: var(--c-navy);
-  background: transparent;
-  box-shadow: inset 0 0 0 1px var(--c-rule);
+  color: var(--c-cream);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--panel-edge-2);
 }
 @media (hover: hover) and (pointer: fine) {
-  .btn-ghost:hover { background: rgba(27, 38, 68, 0.06); }
+  .btn-ghost:hover { background: rgba(255, 255, 255, 0.15); }
 }
-.btn-ghost:active { background: rgba(27, 38, 68, 0.10); }
+.btn-ghost:active { background: rgba(255, 255, 255, 0.05); }
 
 .btn-row {
   margin-top: var(--s6);
-  display: flex; flex-wrap: wrap; gap: var(--s2);
+  display: flex; flex-wrap: wrap; gap: var(--s3);
   justify-content: center;
 }
+.btn-row .btn-primary { margin-top: 0; }
 
-/* Icon-only round button. Light-on-dark by default, for over the world. */
+/* Icon-only round button, used for the top-bar controls. */
 .btn-icon {
   width: var(--touch-min); height: var(--touch-min);
   min-height: 0; padding: 0;
   border-radius: var(--r-pill);
-  color: #fff;
-  background: var(--chrome);
-  box-shadow: inset 0 0 0 1px var(--chrome-edge);
+  color: var(--c-cream);
+  background: rgba(13, 22, 32, 0.42);
+  border: 1px solid rgba(255, 255, 255, 0.20);
 }
-.btn-icon svg { width: 18px; height: 18px; display: block; }
-@media (hover: hover) and (pointer: fine) {
-  .btn-icon:hover { background: var(--chrome-hi); }
-}
-.btn-icon:active { background: var(--chrome-hi); }
-
-/* The over-the-world pill: "@name", and anything like it. */
-.pill {
-  display: inline-flex; align-items: center; gap: 7px;
-  height: 44px;
-  padding: 0 14px 0 12px;
-  border: 0; margin: 0;
-  border-radius: var(--r-pill);
-  color: #fff;
-  background: var(--chrome);
-  box-shadow: inset 0 0 0 1px var(--chrome-edge);
-  font-family: var(--f-sans);
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  transition: background-color var(--d-fast) var(--ease);
-}
-.pill svg { width: 16px; height: 16px; opacity: 0.85; }
-.pill svg:last-child { width: 14px; height: 14px; opacity: 0.6; }
-.pill span { max-width: 18ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-@media (hover: hover) and (pointer: fine) {
-  .pill:hover { background: var(--chrome-hi); }
-}
-.pill:focus-visible, .btn-icon:focus-visible {
-  outline: 2px solid var(--c-grass-2); outline-offset: 2px;
-}
+.btn-icon svg { width: 20px; height: 20px; display: block; }
+.btn-icon:active { background: rgba(13, 22, 32, 0.66); }
 
 /* ==========================================================================
    Boot
    ========================================================================== */
 #boot-bar {
-  width: min(260px, 62vw);
-  height: 3px;
+  width: min(300px, 62vw);
+  height: 2px;
   margin: var(--s6) auto 0;
-  background: rgba(27, 38, 68, 0.12);
-  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 2px;
   overflow: hidden;
 }
 #boot-bar > i {
   display: block; height: 100%; width: 0%;
-  background: var(--c-grass);
-  border-radius: 3px;
+  background: linear-gradient(90deg, var(--c-gold), var(--c-mint));
   transition: width 350ms var(--ease);
 }
 #boot-msg {
-  margin-top: var(--s3);
-  font-family: var(--f-mono);
-  font-size: var(--t-micro);
-  letter-spacing: 0.14em;
+  margin-top: var(--s4);
+  font-family: var(--f-ui);
+  font-size: var(--t-small);
+  letter-spacing: 0.18em;
   text-transform: uppercase;
   opacity: 0.55;
 }
 #boot-msg.error {
-  color: #b5372b;
+  color: #ffb4a2;
   opacity: 0.95;
   text-transform: none;
   letter-spacing: 0.02em;
@@ -360,7 +260,7 @@ html, body {
 }
 
 /* ==========================================================================
-   Settings panel - a field card, paper and ink
+   Settings panel
    ========================================================================== */
 #settings {
   z-index: var(--z-modal);
@@ -369,14 +269,16 @@ html, body {
   justify-content: center;
 }
 
+/* The one blurred surface in the interface. Only ever composited over a
+   canvas that has stopped redrawing, so the blur is computed once. */
 .sheet {
   width: 100%;
-  max-width: 460px;
+  max-width: 520px;
   max-height: 100%;
   display: flex; flex-direction: column;
   border-radius: var(--r-lg);
-  color: var(--c-navy);
-  background: var(--c-sheet);
+  background: var(--panel-solid);
+  border: 1px solid var(--panel-edge);
   box-shadow: 0 40px 90px -30px rgba(0, 0, 0, 0.7);
   overflow: hidden;
   transform: translateY(14px) scale(0.985);
@@ -386,25 +288,27 @@ html, body {
 }
 .screen.on .sheet { transform: none; opacity: 1; }
 
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .sheet {
+    background: rgba(18, 34, 46, 0.62);
+    -webkit-backdrop-filter: blur(22px) saturate(1.1);
+    backdrop-filter: blur(22px) saturate(1.1);
+  }
+}
+
 .sheet-head {
   display: flex; align-items: center; gap: var(--s3);
-  padding: var(--s4) var(--s4) var(--s3) var(--s5);
+  padding: var(--s4) var(--s5);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   flex: 0 0 auto;
 }
 .sheet-head h2 {
   margin: 0; flex: 1 1 auto;
-  font-family: var(--f-sans);
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  font-size: var(--t-title);
+  font-weight: 400;
+  letter-spacing: 0.01em;
 }
-.sheet-head .btn-icon {
-  width: 38px; height: 38px;
-  color: var(--c-navy);
-  background: transparent;
-  box-shadow: inset 0 0 0 1px var(--c-rule);
-}
-.sheet-head .btn-icon svg { width: 16px; height: 16px; }
+.sheet-head h2 em { font-style: italic; color: var(--c-gold); }
 
 /* The scroll region. -webkit-overflow-scrolling keeps momentum on iOS;
    overscroll-behavior stops a flick here from reaching the page. */
@@ -413,19 +317,20 @@ html, body {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
-  padding: 0 var(--s5) var(--s5);
+  padding: var(--s3) var(--s5) var(--s5);
 }
 
 .group { margin-top: var(--s5); }
-.group:first-child { margin-top: var(--s1); }
+.group:first-child { margin-top: var(--s2); }
 .group > h3 {
-  margin: 0 0 var(--s1);
-  font-family: var(--f-mono);
-  font-size: 10.5px;
-  font-weight: 500;
-  letter-spacing: 0.14em;
+  margin: 0 0 var(--s2);
+  font-family: var(--f-ui);
+  font-size: var(--t-micro);
+  font-weight: 700;
+  letter-spacing: var(--track-wide);
   text-transform: uppercase;
-  color: var(--c-muted);
+  color: var(--c-gold);
+  opacity: 0.75;
 }
 
 /* ---- one setting row -------------------------------------------------- */
@@ -433,40 +338,34 @@ html, body {
   display: flex; align-items: center; gap: var(--s4);
   min-height: var(--touch-min);
   padding: var(--s2) 0;
-  border-bottom: 1px solid var(--c-rule);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.055);
 }
 .row:last-child { border-bottom: 0; }
-.row { flex-wrap: wrap; }
-/* The label claims a readable width first; on a narrow sheet the control
-   wraps under it instead of crushing the text into a column. */
-.row-label { flex: 1 1 200px; min-width: 0; }
-.row-ctl { margin-left: auto; }
+.row-label { flex: 1 1 auto; min-width: 0; }
 .row-label > span {
   display: block;
-  font-family: var(--f-sans);
-  font-size: 14.5px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
+  font-family: var(--f-ui);
+  font-size: var(--t-body);
+  letter-spacing: 0.01em;
 }
 .row-label > small {
   display: block;
   margin-top: 2px;
-  font-family: var(--f-serif);
-  font-style: italic;
-  font-size: 13.5px;
-  line-height: 1.4;
-  color: var(--c-muted);
+  font-family: var(--f-ui);
+  font-size: var(--t-micro);
+  line-height: 1.45;
+  opacity: 0.5;
 }
 .row-ctl { flex: 0 0 auto; display: flex; align-items: center; gap: var(--s3); }
 .row-val {
   min-width: 3.4em;
   text-align: right;
   font-family: var(--f-mono);
-  font-size: 12px;
-  color: var(--c-navy-2);
+  font-size: var(--t-small);
+  color: var(--c-mint);
 }
 .row.stack { display: block; }
-.row.stack .row-ctl { margin-top: var(--s2); width: 100%; }
+.row.stack .row-ctl { margin-top: var(--s3); width: 100%; }
 
 /* ---- range ------------------------------------------------------------- */
 input[type="range"] {
@@ -477,42 +376,42 @@ input[type="range"] {
   background: transparent;
   cursor: pointer;
 }
-input[type="range"]:focus-visible { outline: 2px solid var(--c-grass-2); outline-offset: 2px; }
+input[type="range"]:focus-visible { outline: 2px solid var(--c-mint); outline-offset: 2px; }
 input[type="range"]::-webkit-slider-runnable-track {
-  height: 4px; border-radius: 2px;
-  background: rgba(27, 38, 68, 0.14);
+  height: 3px; border-radius: 2px;
+  background: rgba(255, 255, 255, 0.18);
 }
 input[type="range"]::-moz-range-track {
-  height: 4px; border-radius: 2px;
-  background: rgba(27, 38, 68, 0.14);
+  height: 3px; border-radius: 2px;
+  background: rgba(255, 255, 255, 0.18);
 }
-/* A 20px thumb inside a 48px-tall transparent track: the hit area is the
+/* A 22px thumb inside a 48px-tall transparent track: the hit area is the
    full 48px so a thumb can find it, while the visible dot stays delicate. */
 input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none; appearance: none;
-  width: 20px; height: 20px;
-  margin-top: -8px;
+  width: 22px; height: 22px;
+  margin-top: -9.5px;
   border-radius: var(--r-pill);
-  background: var(--c-navy);
-  border: 3px solid var(--c-sheet);
-  box-shadow: 0 0 0 1px var(--c-navy), 0 2px 6px rgba(0, 0, 0, 0.25);
+  background: var(--c-gold);
+  border: 2px solid rgba(255, 255, 255, 0.75);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
 }
 input[type="range"]::-moz-range-thumb {
-  width: 14px; height: 14px;
-  border: 3px solid var(--c-sheet);
+  width: 22px; height: 22px;
+  border: 2px solid rgba(255, 255, 255, 0.75);
   border-radius: var(--r-pill);
-  background: var(--c-navy);
-  box-shadow: 0 0 0 1px var(--c-navy), 0 2px 6px rgba(0, 0, 0, 0.25);
+  background: var(--c-gold);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
 }
 
 /* ---- switch ------------------------------------------------------------ */
 .switch {
   position: relative;
-  width: 48px; height: 28px;
+  width: 52px; height: 30px;
   flex: 0 0 auto;
   border: 0; padding: 0; margin: 0;
   border-radius: var(--r-pill);
-  background: rgba(27, 38, 68, 0.16);
+  background: rgba(255, 255, 255, 0.16);
   cursor: pointer;
   transition: background-color var(--d-fast) var(--ease);
   -webkit-tap-highlight-color: transparent;
@@ -520,42 +419,48 @@ input[type="range"]::-moz-range-thumb {
 .switch::after {
   content: "";
   position: absolute; top: 3px; left: 3px;
-  width: 22px; height: 22px;
+  width: 24px; height: 24px;
   border-radius: var(--r-pill);
-  background: #fff;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  background: var(--c-cream);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.4);
   transition: transform var(--d-fast) var(--ease);
 }
-.switch[aria-checked="true"] { background: var(--c-grass); }
-.switch[aria-checked="true"]::after { transform: translateX(20px); }
-.switch:focus-visible { outline: 2px solid var(--c-grass-2); outline-offset: 3px; }
+.switch[aria-checked="true"] { background: var(--c-mint); }
+.switch[aria-checked="true"]::after { transform: translateX(22px); }
+.switch:focus-visible { outline: 2px solid var(--c-mint); outline-offset: 3px; }
 
-/* ---- segmented choice: a row of chips, the chosen one inked ----------- */
+/* ---- segmented choice -------------------------------------------------- */
 .seg {
-  display: flex; flex-wrap: wrap;
-  gap: 6px;
+  display: flex;
+  padding: 3px;
+  gap: 2px;
+  border-radius: var(--r-pill);
+  background: rgba(255, 255, 255, 0.08);
 }
 .seg button {
-  min-width: 52px; min-height: 36px;
-  border: 0; padding: 0 var(--s4);
+  flex: 1 1 0;
+  min-width: 52px; min-height: 38px;
+  border: 0; padding: 0 var(--s3);
   border-radius: var(--r-pill);
-  background: #fff;
-  box-shadow: inset 0 0 0 1px var(--c-rule);
-  color: var(--c-navy);
-  font-family: var(--f-sans);
-  font-size: 13px;
-  font-weight: 600;
+  background: transparent;
+  color: var(--c-cream);
+  font-family: var(--f-ui);
+  font-size: var(--t-micro);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   cursor: pointer;
+  opacity: 0.6;
   transition: background-color var(--d-fast) var(--ease),
-              color var(--d-fast) var(--ease);
+              color var(--d-fast) var(--ease), opacity var(--d-fast) var(--ease);
   -webkit-tap-highlight-color: transparent;
 }
 .seg button[aria-pressed="true"] {
-  background: var(--c-navy);
-  box-shadow: none;
-  color: #fff;
+  background: var(--c-gold);
+  color: var(--c-teal);
+  opacity: 1;
 }
-.seg button:focus-visible { outline: 2px solid var(--c-grass-2); outline-offset: 2px; }
+.seg button:focus-visible { outline: 2px solid var(--c-mint); outline-offset: 2px; }
 
 /* ---- text field -------------------------------------------------------- */
 input[type="text"] {
@@ -563,301 +468,28 @@ input[type="text"] {
   min-height: 44px;
   padding: 0 var(--s4);
   border-radius: var(--r-sm);
-  border: 1px solid var(--c-rule);
-  background: #fff;
-  color: var(--c-navy);
-  font-family: var(--f-sans);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(0, 0, 0, 0.22);
+  color: var(--c-cream);
+  font-family: var(--f-ui);
   /* 16px or more, always: below that iOS Safari zooms the page on focus and
      does not zoom back out. */
   font-size: 16px;
 }
-input[type="text"]::placeholder { color: var(--c-muted); opacity: 0.7; }
 input[type="text"]:focus {
   outline: 0;
-  border-color: var(--c-navy-2);
-  box-shadow: 0 0 0 3px rgba(43, 58, 99, 0.12);
+  border-color: var(--panel-edge);
+  background: rgba(0, 0, 0, 0.32);
 }
 
 .sheet-foot {
   flex: 0 0 auto;
   display: flex; gap: var(--s3); align-items: center;
   padding: var(--s3) var(--s5) calc(var(--s3) + var(--safe-b));
-  border-top: 1px solid var(--c-rule);
-  background: var(--c-sheet-2);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 .sheet-foot .spacer { flex: 1 1 auto; }
-.sheet-foot .btn { min-height: 42px; padding: 0 var(--s5); }
-
-/* ==========================================================================
-   Chrome - the HUD around the picture (ui/hud.js)
-
-   Dark, translucent, unblurred: this IS on screen while the world renders,
-   so the performance rule at the top of the file applies in full. Text
-   carries a soft static shadow instead of a backdrop.
-   ========================================================================== */
-#chrome {
-  position: fixed; inset: 0;
-  z-index: var(--z-hud);
-  pointer-events: none;
-  color: #fff;
-  opacity: 0;
-  transition: opacity var(--d-slow) var(--ease);
-}
-#chrome.on { opacity: 1; }
-#chrome[data-screen="settings"] { opacity: 0.35; }
-
-.hud-brand {
-  position: absolute;
-  top: calc(var(--s4) + var(--safe-t));
-  left: calc(var(--s5) + var(--safe-l));
-  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.35);
-}
-.hud-meta {
-  margin-top: 7px;
-  font-family: var(--f-mono);
-  font-size: 11.5px;
-  font-weight: 500;
-  letter-spacing: 0.02em;
-  opacity: 0.92;
-}
-.hud-meta-2 {
-  display: flex; align-items: center; gap: 6px;
-  margin-top: 5px;
-  font-size: 10.5px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-.chip {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: var(--r-pill);
-  background: rgba(255, 255, 255, 0.16);
-  letter-spacing: 0.02em;
-  text-transform: none;
-  font-size: 10.5px;
-  text-shadow: none;
-}
-
-/* ---- the switch --------------------------------------------------------- */
-.hud-center {
-  position: absolute;
-  top: calc(var(--s3) + var(--safe-t));
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex; flex-direction: column; align-items: center;
-  text-align: center;
-  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.4);
-}
-.lever {
-  position: relative;
-  width: 46px; height: 30px;
-}
-/* The base: a little green pill with a highlight on top. */
-.lever::after {
-  content: "";
-  position: absolute; left: 0; right: 0; bottom: 0;
-  height: 13px;
-  border-radius: var(--r-pill);
-  background: linear-gradient(180deg, #8fd47e, var(--c-grass) 70%);
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85), 0 3px 8px rgba(0, 0, 0, 0.3);
-}
-/* The stick, pivoting at the base. Only its transform ever changes. */
-.lever-stick {
-  position: absolute;
-  left: 50%; bottom: 6px;
-  width: 2px; height: 19px;
-  margin-left: -1px;
-  background: #e9e4d8;
-  transform-origin: 50% 100%;
-  transition: transform var(--d-slow) var(--ease-out-soft);
-}
-.lever-stick b {
-  position: absolute; top: -6px; left: -5px;
-  width: 12px; height: 12px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #ff9a8c, var(--c-coral) 55%, #b23a2f);
-}
-
-.hud-modes {
-  display: flex; gap: 14px;
-  margin-top: 8px;
-  font-family: var(--f-mono);
-  font-size: 10.5px;
-  font-weight: 500;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-}
-.hud-modes span { opacity: 0.5; transition: opacity var(--d-mid) var(--ease); }
-.hud-modes span.on { opacity: 1; font-weight: 600; }
-
-.hud-motto {
-  margin-top: 5px;
-  font-family: var(--f-serif);
-  font-style: italic;
-  font-size: 15px;
-}
-.hud-chip {
-  margin-top: 8px;
-  padding: 4px 10px;
-  border-radius: var(--r-pill);
-  background: var(--chrome);
-  box-shadow: inset 0 0 0 1px var(--chrome-edge);
-  font-family: var(--f-mono);
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  text-shadow: none;
-}
-.hud-center.live .hud-chip::before {
-  content: "";
-  display: inline-block;
-  width: 6px; height: 6px;
-  margin-right: 7px;
-  border-radius: 50%;
-  background: var(--c-coral);
-  vertical-align: 1px;
-}
-
-/* ---- the sound card ----------------------------------------------------- */
-.hud-player {
-  position: absolute;
-  left: calc(var(--s4) + var(--safe-l));
-  bottom: calc(var(--s4) + var(--safe-b));
-  display: flex; align-items: center; gap: 10px;
-  padding: 6px 8px 6px 6px;
-  border-radius: var(--r-pill);
-  background: var(--chrome);
-  box-shadow: inset 0 0 0 1px var(--chrome-edge);
-  pointer-events: auto;
-}
-.disc {
-  position: relative;
-  width: 36px; height: 36px;
-  flex: 0 0 auto;
-  border-radius: 50%;
-  background: conic-gradient(from 200deg, #f6b25a, #e46c4a, #7a4a8a, #2c3f6e, #f6b25a);
-  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.25);
-}
-.disc i {
-  position: absolute; left: 50%; top: 50%;
-  width: 9px; height: 9px; margin: -4.5px 0 0 -4.5px;
-  border-radius: 50%;
-  background: #1b1f26;
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.4);
-}
-.hud-player[data-phase="moonlight"] .disc,
-.hud-player[data-phase="blue-hour"] .disc {
-  background: conic-gradient(from 200deg, #9fb7e8, #3b4f8f, #1a2342, #6c7fc0, #9fb7e8);
-}
-.hud-player[data-phase="morning"] .disc,
-.hud-player[data-phase="first-light"] .disc,
-.hud-player[data-phase="high-noon"] .disc,
-.hud-player[data-phase="afternoon"] .disc {
-  background: conic-gradient(from 200deg, #ffe39a, #9fe3c9, #6db0e8, #f6d98a, #ffe39a);
-}
-.track { display: flex; flex-direction: column; min-width: 0; padding-right: 4px; }
-.track b {
-  font-family: var(--f-sans);
-  font-size: 13.5px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  white-space: nowrap;
-}
-.track small {
-  margin-top: 1px;
-  font-family: var(--f-mono);
-  font-size: 9.5px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  opacity: 0.6;
-  white-space: nowrap;
-}
-.round-btn {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 32px; height: 32px;
-  flex: 0 0 auto;
-  border: 0; padding: 0;
-  border-radius: 50%;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  transition: transform var(--d-fast) var(--ease), background-color var(--d-fast) var(--ease);
-}
-.round-btn svg { width: 15px; height: 15px; }
-.round-btn.play { background: #fff; color: #1b1f26; }
-.round-btn.play svg { fill: currentColor; }
-.round-btn.ghost { background: transparent; color: rgba(255, 255, 255, 0.75); }
-@media (hover: hover) and (pointer: fine) {
-  .round-btn.ghost:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
-  .round-btn.play:hover { transform: scale(1.06); }
-}
-.round-btn:active { transform: scale(0.94); }
-.round-btn:focus-visible { outline: 2px solid var(--c-grass-2); outline-offset: 2px; }
-/* The disc turns while the meadow is audible. One transform animation on a
-   36px element - the only continuous motion in the chrome. */
-@keyframes disc-spin { to { transform: rotate(360deg); } }
-.hud-player .disc { animation: disc-spin 9s linear infinite; }
-.hud-player.muted .disc { animation-play-state: paused; }
-.hud-player.muted .track { opacity: 0.6; }
-@media (prefers-reduced-motion: reduce) {
-  .hud-player .disc { animation: none; }
-}
-
-/* ---- the first-entry hint --------------------------------------------- */
-.hud-hint {
-  position: absolute;
-  left: 50%;
-  bottom: calc(var(--s5) + var(--safe-b));
-  display: flex; gap: 6px; flex-wrap: wrap; justify-content: center;
-  max-width: calc(100vw - 2 * var(--s4));
-  transform: translate(-50%, 10px);
-  opacity: 0;
-  transition: opacity var(--d-slow) var(--ease), transform var(--d-slow) var(--ease-out-soft);
-}
-.hud-hint.on { opacity: 1; transform: translate(-50%, 0); }
-.hud-hint span {
-  padding: 6px 11px;
-  border-radius: var(--r-pill);
-  background: var(--chrome-hi);
-  box-shadow: inset 0 0 0 1px var(--chrome-edge);
-  font-family: var(--f-mono);
-  font-size: 11px;
-  letter-spacing: 0.04em;
-}
-.hud-hint b { font-weight: 600; text-transform: uppercase; color: #bfeab0; }
-
-/* On touch the bottom-left belongs to net.js's chat log, so the hint sits
-   up under the top bar instead. */
-body.is-touch .hud-hint {
-  top: calc(118px + var(--safe-t));
-  bottom: auto;
-}
-
-/* ---- which screen gets how much -------------------------------------- */
-/* Over the title and pause cards the switch is noise: the card is the
-   centre of attention. */
-#chrome[data-screen="title"] .hud-center,
-#chrome[data-screen="paused"] .hud-center { opacity: 0; }
-.hud-center { transition: opacity var(--d-mid) var(--ease); }
-
-/* On a phone in play, the bottom-left is the walking thumb's. The card goes,
-   and the brand shrinks to the wordmark so the chat bar has the top strip. */
-body.is-touch[data-meadow="playing"] .hud-player { display: none; }
-body.is-touch .hud-meta-2 { display: none; }
-body.is-touch .hud-brand { top: calc(var(--s3) + var(--safe-t)); left: calc(var(--s4) + var(--safe-l)); }
-
-/* Narrow screens: the centre switch and the brand would meet. The switch
-   keeps its lever and words, the brand loses its second line. */
-@media (max-width: 720px) {
-  .hud-meta-2 { display: none; }
-  .hud-motto, .hud-chip { display: none; }
-  .wordmark { font-size: 16px; }
-  .wordmark span { display: none; }
-}
-@media (max-width: 460px) {
-  .hud-center { display: none; }
-  .hud-meta { font-size: 10.5px; }
-}
+.sheet-foot .btn { min-height: 44px; padding: 0 var(--s5); }
 
 /* ==========================================================================
    Touch controls
@@ -890,8 +522,8 @@ body.is-touch .hud-brand { top: calc(var(--s3) + var(--safe-t)); left: calc(var(
      for the knob alone. */
   margin: -59px 0 0 -59px;
   border-radius: var(--r-pill);
-  background: rgba(22, 26, 32, 0.24);
-  border: 1.5px solid rgba(255, 255, 255, 0.35);
+  background: rgba(16, 26, 36, 0.26);
+  border: 2px solid rgba(255, 255, 255, 0.30);
   pointer-events: none;
   opacity: 0;
   transition: opacity var(--d-fast) var(--ease);
@@ -902,13 +534,13 @@ body.is-touch .hud-brand { top: calc(var(--s3) + var(--safe-t)); left: calc(var(
   width: 54px; height: 54px;
   margin: -27px 0 0 -27px;
   border-radius: var(--r-pill);
-  background: rgba(255, 255, 255, 0.82);
-  border: 0;
+  background: rgba(246, 217, 138, 0.52);
+  border: 2px solid rgba(255, 255, 255, 0.55);
   will-change: transform;
 }
 /* Lit while sprinting, so the double-tap is visibly acknowledged. */
-#stick.sprint { border-color: rgba(143, 212, 126, 0.95); }
-#stick.sprint #stick-knob { background: var(--c-grass-2); }
+#stick.sprint { border-color: rgba(159, 227, 201, 0.85); }
+#stick.sprint #stick-knob { background: rgba(159, 227, 201, 0.60); }
 
 /* ---- action pads ------------------------------------------------------- */
 .pad {
@@ -917,31 +549,25 @@ body.is-touch .hud-brand { top: calc(var(--s3) + var(--safe-t)); left: calc(var(
   touch-action: none;
   display: flex; align-items: center; justify-content: center;
   border-radius: var(--r-pill);
-  background: var(--chrome);
-  border: 0;
-  box-shadow: inset 0 0 0 1.5px var(--chrome-edge);
-  color: #fff;
-  font-family: var(--f-mono);
+  background: rgba(16, 26, 36, 0.40);
+  border: 2px solid rgba(255, 255, 255, 0.30);
+  color: var(--c-cream);
+  font-family: var(--f-ui);
   font-size: var(--t-micro);
-  font-weight: 600;
-  letter-spacing: 0.1em;
+  font-weight: 700;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   -webkit-tap-highlight-color: transparent;
   transition: background-color var(--d-fast) var(--ease),
               transform var(--d-fast) var(--ease);
 }
-.pad.down { background: var(--chrome-hi); transform: scale(0.94); }
-/* Jump is the grass-green "do it" button of the reference. */
-#pad-jump {
-  width: 82px; height: 82px;
-  background: var(--c-grass);
-  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.35), 0 8px 20px -8px rgba(0, 0, 0, 0.5);
-}
-#pad-jump.down { background: #346f3f; }
+.pad.down { background: rgba(16, 26, 36, 0.66); transform: scale(0.94); }
+#pad-jump { width: 82px; height: 82px; }
 #pad-sprint { width: 68px; height: 68px; font-size: 10px; }
 #pad-sprint.on {
-  background: #fff;
-  color: var(--c-navy);
+  background: rgba(159, 227, 201, 0.50);
+  border-color: rgba(159, 227, 201, 0.85);
+  color: var(--c-teal);
 }
 
 /* Top-right utility cluster: settings, pause, fullscreen. Present outside
@@ -949,21 +575,13 @@ body.is-touch .hud-brand { top: calc(var(--s3) + var(--safe-t)); left: calc(var(
 #top-right {
   position: fixed;
   top: calc(var(--s3) + var(--safe-t));
-  right: calc(var(--s4) + var(--safe-r));
+  right: calc(var(--s3) + var(--safe-r));
   z-index: var(--z-controls);
-  display: flex; align-items: center; gap: var(--s2);
+  display: flex; gap: var(--s2);
   pointer-events: auto;
 }
 #top-right .btn-icon { width: 44px; height: 44px; }
-#top-right .btn-icon svg { width: 17px; height: 17px; }
-/* Over the menus the pill is the only way in to settings besides the card's
-   own button; in desktop play the pointer is locked, so it is look-only. */
-/* A phone held upright has room for the wordmark OR a name, not both: the
-   pill folds down to its glyph, still a 44px target. */
-@media (max-width: 520px) {
-  #btn-name { width: 44px; padding: 0; justify-content: center; }
-  #btn-name span, #btn-name svg:last-child { display: none; }
-}
+#top-right .btn-icon svg { width: 18px; height: 18px; }
 #top-right.hide { display: none; }
 
 /* ==========================================================================
@@ -1072,36 +690,34 @@ html #mn-bar, html #mn-ui {
 
 /* Its count chip stays: there is no HUD any more, so this is the only thing
    that tells you whether anybody else is here. */
-/* The presence count now lives in the chrome's centre chip, so net.js's own
-   copy of it is hidden rather than shown twice. */
-html #mn-count { display: none; }
+html #mn-count {
+  font-family: var(--f-ui);
+  border-radius: var(--r-pill);
+  background: rgba(13, 22, 32, 0.40);
+}
 
 /* Buttons, restyled to the same pills as everything else. */
 html #mn-bar button {
   min-height: 38px;
   padding: 0 var(--s4);
   border-radius: var(--r-pill);
-  background: var(--chrome);
-  border: 1px solid var(--chrome-edge);
-  color: #fff;
-  font-family: var(--f-sans);
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: -0.005em;
+  background: rgba(13, 22, 32, 0.42);
+  border: 1px solid rgba(255, 255, 255, 0.20);
+  color: var(--c-cream);
+  font-family: var(--f-ui);
+  font-size: var(--t-micro);
+  font-weight: 700;
+  letter-spacing: var(--track-ui);
 }
-html #mn-bar button.live { background: var(--c-grass); border-color: rgba(255, 255, 255, 0.35); color: #fff; }
-
-/* Desktop: the chat log is bottom-left, which is now the sound card's.
-   Lifted above it. */
-html body:not(.mn-touch) #mn-ui { bottom: calc(76px + var(--safe-b)); }
+html #mn-bar button.live { border-color: var(--c-mint); color: var(--c-mint); }
 
 /* Chat messages: the same warm card as the rest of the interface. The blur
    on these is dropped - they are on screen WHILE the world is rendering,
    which is the one thing the note at the top of this file forbids. */
 html .mn-msg {
-  background: var(--chrome-hi);
-  border-left: 0;
-  border-radius: var(--r-md);
+  background: rgba(13, 22, 32, 0.52);
+  border-left: 2px solid var(--panel-edge);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
   font-family: var(--f-ui);
@@ -1114,7 +730,7 @@ html .mn-msg {
 html body.mn-touch #mn-bar {
   flex-direction: row;
   align-items: center;
-  top: calc(var(--s3) + var(--safe-t) + 44px);
+  top: calc(var(--s3) + var(--safe-t) + 42px);
   left: calc(var(--s4) + var(--safe-l));
   right: auto;
   bottom: auto;
@@ -1131,8 +747,8 @@ html body.mn-touch #mn-bar button {
 html #mn-panel { z-index: var(--z-modal); }
 html #mn-panel .box {
   background: var(--panel-solid);
-  border: 1px solid var(--chrome-edge);
+  border: 1px solid var(--panel-edge);
   border-radius: var(--r-lg);
-  font-family: var(--f-sans);
+  font-family: var(--f-ui);
 }
-html #mn-panel h3 { color: #fff; font-family: var(--f-sans); }
+html #mn-panel h3 { color: var(--c-gold); font-family: var(--f-ui); }
