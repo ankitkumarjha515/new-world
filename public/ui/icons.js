@@ -44,6 +44,21 @@ var ICONS = {
   sound: svg(
     '<path d="M4 9.5h3L11 6v12l-4-3.5H4Z"/>' +
     '<path d="M15.5 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11"/>'
+  ),
+  mute: svg(
+    '<path d="M4 9.5h3L11 6v12l-4-3.5H4Z"/>' +
+    '<path d="M16 9.5l5 5M21 9.5l-5 5"/>'
+  ),
+  /* Head and shoulders, for the name pill. */
+  user: svg('<circle cx="12" cy="8" r="3.6"/><path d="M5 20a7 7 0 0 1 14 0"/>'),
+  chevron: svg('<path d="M6 9.5l6 6 6-6"/>'),
+  arrow: svg('<path d="M5 12h14M13 6l6 6-6 6"/>'),
+  /* The "the sky asked" glyph on the title card. */
+  cloud: svg('<path d="M7.5 18.5h9.5a4 4 0 0 0 .4-7.98A5.5 5.5 0 0 0 6.8 9.8 4.35 4.35 0 0 0 7.5 18.5Z"/>'),
+  sprout: svg(
+    '<path d="M12 21v-8"/>' +
+    '<path d="M12 13c0-4 3-6.5 7.5-6.5 0 4.5-3 6.5-7.5 6.5Z"/>' +
+    '<path d="M12 15.5C12 12.5 9.6 10.5 5 10.5c0 3.5 2.4 5 7 5Z"/>'
   )
 };
 
