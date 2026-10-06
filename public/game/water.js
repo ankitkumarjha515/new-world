@@ -71,11 +71,12 @@ function buildOcean() {
     transparent: true, depthWrite: false, side: THREE.DoubleSide, fog: false,
     uniforms: commonUniforms({
       uDepthMap: { value: depthTex },
-      uDeep: { value: new THREE.Color(0x0b4763) },
-      uShallow: { value: new THREE.Color(0x22b8b4) },
-      uSand: { value: new THREE.Color(0xb9ac80) },
-      uSkyLo: { value: new THREE.Color(0xdcedf4) },
-      uSkyHi: { value: new THREE.Color(0x5f9fd8) }
+      /* golden hour: the water reflects a warm, hazy sky, not midday blue */
+      uDeep: { value: new THREE.Color(0x163c48) },
+      uShallow: { value: new THREE.Color(0x3f8a84) },
+      uSand: { value: new THREE.Color(0xa6936c) },
+      uSkyLo: { value: new THREE.Color(0xe6c79a) },
+      uSkyHi: { value: new THREE.Color(0x6f8f96) }
     }),
     vertexShader: [
       'uniform float uTime; uniform sampler2D uDepthMap;',
@@ -184,9 +185,9 @@ function calmWaterMaterial(flowSpeed, tint, edgeMode) {
     uniforms: commonUniforms({
       uFlow: { value: flowSpeed },
       uTint: { value: new THREE.Color(tint) },
-      uDeep: { value: new THREE.Color(0x0f6075) },
-      uSkyLo: { value: new THREE.Color(0xc2ebfa) },
-      uSkyHi: { value: new THREE.Color(0x3e96f2) },
+      uDeep: { value: new THREE.Color(0x1b4650) },
+      uSkyLo: { value: new THREE.Color(0xe2c497) },
+      uSkyHi: { value: new THREE.Color(0x6a8c94) },
       uEdge: { value: edgeMode }
     }),
     vertexShader: [

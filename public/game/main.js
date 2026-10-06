@@ -2,7 +2,7 @@
    Extracted from the original single file. Logic unchanged. */
 
 import { audioIn, initAudio, updateAudio } from './audio.js';
-import { buildCharacter, animateCharacter } from './character.js';
+import { buildCharacter, animateCharacter } from './blob.js';
 import { SUN, camera, clamp, clock, initEngine, renderer, scene, smoothstep, terrainHeight, timeU } from './core.js';
 import { buildCreatures, butterflies, updateCreatures } from './creatures.js';
 import { buildGrassGrid, fillGrassTile, grassMat, grassQueue, updateGrass } from './grass.js';
@@ -11,7 +11,7 @@ import { WALK, P, bindInput, playerStart, updatePlayer } from './player.js';
 import { applyPostFX, getLODScale, initQuality, updatePerfHUD, autoQuality, fsPass, onResize, rtScene, setupPost } from './post.js';
 import { useModelTrees, setPropLODScale, buildBridge, buildFlowers, buildGardenAccents, buildLandmarks, buildReeds, buildRocks, buildSunflowers, buildTrees, dumpLODReport, natureReady } from './props.js';
 import { buildActors, updateActors } from './actors.js';
-import { buildClouds, buildSky, skyMesh } from './sky.js';
+import { buildSky, skyMesh } from './sky.js';
 import { buildVolcano } from './volcano.js';
 import { buildCliffWall, genTerrain } from './terrain.js';
 import { buildInlandWater, buildOcean, buildWaterfall, oceanMesh } from './water.js';
@@ -37,8 +37,9 @@ function* boot() {
   buildOcean();
   buildInlandWater();
   var fall = buildWaterfall();
-  yield ['Gathering clouds', 0.81];
-  buildClouds();
+  /* No cumulus: under a golden-hour haze, seen up through a pine canopy,
+     hard-edged anime clouds read as cut-outs pasted on the sky. The sky
+     shader's warm gradient carries it alone now. */
   yield ['Waking the mountain', 0.82];
   buildVolcano();
   yield ['Planting the woods', 0.83];
@@ -112,20 +113,32 @@ function maybeUseModelTrees() {
   } catch (e) { /* never let this break the world */ }
 }
 
-/* Your own body. No head - a head in front of the camera is a wall of skull.
-   Id 0 is reserved for "me" until the server hands out a real one. */
-var selfBody = null;
+/* Your own little one, seen from behind in third person. Id 0 is reserved
+   for "me" until the server hands out a real one.
+
+   It turns to face where it is WALKING, not where the camera points, and
+   eases round rather than snapping - strafing turns it side-on, walking
+   back toward the camera shows its face. Standing still it keeps whatever
+   heading it last had. */
+var selfBody = null, selfYaw = 0;
 function buildSelfBody() {
   if (selfBody) { return; }
-  selfBody = buildCharacter(THREE, 0, { firstPerson: true });
+  selfBody = buildCharacter(THREE, 0, { firstPerson: false });
+  selfYaw = P.yaw;
   scene.add(selfBody.root);
 }
 
 function updateSelfBody(dt) {
   if (!selfBody) { return; }
   var hs = Math.sqrt(P.vel.x * P.vel.x + P.vel.z * P.vel.z);
+  if (hs > 0.6) {
+    var want = Math.atan2(-P.vel.x, -P.vel.z);
+    var d = want - selfYaw;
+    d = Math.atan2(Math.sin(d), Math.cos(d));
+    selfYaw += d * Math.min(1, dt * 10);
+  }
   selfBody.root.position.set(P.pos.x, P.pos.y, P.pos.z);
-  selfBody.root.rotation.y = P.yaw;
+  selfBody.root.rotation.y = selfYaw;
   animateCharacter(selfBody, dt, hs, !P.onGround);
 }
 
@@ -246,7 +259,7 @@ function renderFrame(dt) {
   var px = P.pos.x, py = P.pos.y, pz = P.pos.z;
   skyMesh.position.set(px, py, pz);
   oceanMesh.position.set(Math.round(px / 8) * 8, 0, Math.round(pz / 8) * 8);
-  if (grassMat) { grassMat.uniforms.uCam.value.set(px, py, pz); }
+  if (grassMat) { grassMat.uniforms.uCam.value.copy(camera.position); }
 
   renderer.setRenderTarget(rtScene);
   renderer.render(scene, camera);
@@ -255,7 +268,13 @@ function renderFrame(dt) {
   _sunNDC.set(px + SUN.x * 3000, py + SUN.y * 3000, pz + SUN.z * 3000).project(camera);
   var behind = _sunNDC.z > 1 || _sunNDC.z < -1;
   var offx = Math.abs(_sunNDC.x), offy = Math.abs(_sunNDC.y);
-  var amt = behind ? 0 : (1 - smoothstep(0.5, 1.6, Math.max(offx, offy))) * 0.18;   /* sun shafts were washing the beach out */
+  /* Sun shafts are a headline feature of the golden-hour wood: low sun,
+     haze and trunks are exactly what makes visible rays. */
+  var amt = behind ? 0 : (1 - smoothstep(0.5, 1.6, Math.max(offx, offy))) * 0.55;
+  /* Behind the camera the projected position is mirrored nonsense, and the
+     haze would tint gold around it. Park it far below the frame instead,
+     so looking away from the sun gives the cool side of the haze. */
+  if (behind) { _sunNDC.set(0, -6, 0); }
 
   /* One call: when the glow chain is off this skips bright-extract, god rays
      and both blur passes and composites straight from the scene target - 4 of

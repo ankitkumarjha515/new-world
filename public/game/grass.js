@@ -118,6 +118,10 @@ function grassMaterial() {
       '  vec3 baseShade = aCol*0.34 + vec3(0.02,0.03,0.01);',
       '  vec3 tipShade = aCol*1.15 + vec3(0.03,0.02,-0.02);',
       '  vCol = clamp(mix(baseShade, tipShade, grad) * lit, 0.0, 0.72);',
+      /* backlight: blades between you and a low sun glow gold at the tips */
+      '  vec3 vd = normalize(wp - uCam);',
+      '  float back = pow(max(dot(vd, normalize(uSun)), 0.0), 3.0);',
+      '  vCol += vec3(0.55, 0.36, 0.12) * back * grad * 0.55;',
       '  vDist = d;',
       '  gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0);',
       '}'
@@ -132,7 +136,7 @@ function grassMaterial() {
   return m;
 }
 
-var GCAP = 620; /* raised from 520: grass is opaque + instanced, so instance
+var GCAP = 1150; /* raised from 520: grass is opaque + instanced, so instance
   count is the cheap lever (unlike petals/mist below, which are transparent
   overdraw). Tuft template also went 3->5 blades for the same reason. */
 
@@ -170,8 +174,8 @@ function fillGrassTile(slot, ti, tj) {
 
   /* which of the per-blade exclusion tests can possibly bite in this tile */
   var x1 = x0 + GT, z1 = z0 + GT;
-  var doWalk = !boxFar(WALK_BB, x0, z0, x1, z1, 2.2);
-  var doBeach = !boxFar(BEACH_BB, x0, z0, x1, z1, 2.0);
+  var doWalk = !boxFar(WALK_BB, x0, z0, x1, z1, 2.7);
+  var doBeach = !boxFar(BEACH_BB, x0, z0, x1, z1, 2.7);
   var doRiver = !boxFar(RIVER_BB, x0, z0, x1, z1, 34) && z1 > -360 && z0 < 470;
   var doBrook = !boxFar(BROOK_BB, x0, z0, x1, z1, 14);
   var pcx = POOL.x < x0 ? x0 - POOL.x : (POOL.x > x1 ? POOL.x - x1 : 0);
@@ -200,8 +204,8 @@ function fillGrassTile(slot, ti, tj) {
     if (doVolc && volcanoBare(x, z) > 0.30) continue;
 
     /* keep grass clear of stone walkway and beach path (Images 4 & 5) */
-    if (doWalk && pathInfo(WALKPATH, x, z).d < 2.2) continue;
-    if (doBeach && pathInfo(BEACHPATH, x, z).d < 2.0) continue;
+    if (doWalk && pathInfo(WALKPATH, x, z).d < 2.7) continue;
+    if (doBeach && pathInfo(BEACHPATH, x, z).d < 2.7) continue;
 
     var dens = 1.0;
     dens *= 1 - smoothstep(0.42, 0.92, slope);
@@ -234,20 +238,24 @@ function fillGrassTile(slot, ti, tj) {
     }
     /* thicker in the low hollows */
     var patch = fbm(x * 0.021 + 5.5, z * 0.021 - 2.2, 3);
-    dens *= 0.35 + 0.95 * patch;
+    dens *= 0.55 + 0.80 * patch;
     if (rng() > dens) continue;
 
-    var hh = (0.34 + rng() * 0.48) * (0.75 + 0.55 * patch);
+    /* Tall forest-edge grass: knee to waist high on the little character,
+       and tallest right at the path shoulders, where it leans in. */
+    var hh = (0.55 + rng() * 0.85) * (0.75 + 0.55 * patch);
     if (sandy > 0.3) hh *= 1.35;
     var tint = fbm(x * 0.013 + 4.2, z * 0.013 - 8.8, 3);
     var dry = smoothstep(0.58, 0.90, fbm(x * 0.0026 + 19.4, z * 0.0026 + 2.1, 3));
-    var r = lerp(0.24, 0.50, tint), gg = lerp(0.58, 0.88, tint), bb = lerp(0.12, 0.24, tint);
-    r = lerp(r, 0.72, dry * 0.50); gg = lerp(gg, 0.85, dry * 0.50); bb = lerp(bb, 0.28, dry * 0.50);
+    /* deep, cool forest green with olive in it; a little straw in the dry
+       patches, never the bright meadow green this used to be */
+    var r = lerp(0.16, 0.32, tint), gg = lerp(0.34, 0.54, tint), bb = lerp(0.07, 0.13, tint);
+    r = lerp(r, 0.52, dry * 0.35); gg = lerp(gg, 0.56, dry * 0.35); bb = lerp(bb, 0.22, dry * 0.35);
     r = lerp(r, 0.72, sandy * 0.6); gg = lerp(gg, 0.73, sandy * 0.6); bb = lerp(bb, 0.47, sandy * 0.6);
     var f = rng() * 0.20 - 0.05;
     aPos[n * 3] = x; aPos[n * 3 + 1] = h - 0.05; aPos[n * 3 + 2] = z;
     aRot[n] = rng() * PI;
-    aScale[n * 2] = hh; aScale[n * 2 + 1] = 0.055 + rng() * 0.065;
+    aScale[n * 2] = hh; aScale[n * 2 + 1] = 0.045 + rng() * 0.055;
     aCol[n * 3] = clamp(r + f, 0, 1); aCol[n * 3 + 1] = clamp(gg + f, 0, 1); aCol[n * 3 + 2] = clamp(bb + f, 0, 1);
     if (h < minY) minY = h; if (h > maxY) maxY = h;
     n++;

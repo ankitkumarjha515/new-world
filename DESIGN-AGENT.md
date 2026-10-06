@@ -6,16 +6,28 @@ move. The look lives in the **lighting model**, not in the grade.
 
 ## The target
 
-Anime landscape painting. Reference images are in `inspiration-image/`.
-Think Makoto Shinkai and Studio Ghibli backgrounds, not photorealism.
+**Golden-hour pine forest, seen in third person.** The reference is a video
+of a misty conifer wood at sunset (see the commit that introduced this
+section): a low sun burning through haze between tall bare trunks, a
+pebbly dirt path, waist-high grass, lupines and ferns, and a small round
+character waddling down the path, seen from behind.
 
-Five things define it. In order of how much they matter:
+The world used to be an anime meadow (banded toon light, cobalt sky,
+cumulus). That direction is retired. The images in `inspiration-image/`
+are from the old direction.
 
-1. **Banded light.** Light and shade snap into 2–3 flat steps. No smooth fade.
-2. **Sculptural clouds** with blue sky between them. Bright tops, blue-grey undersides.
-3. **Hard light / soft fill.** Strong sun, weak ambient. A wide gap between lit and shaded.
-4. **Split tone.** Sunlit surfaces go gold. Shadows go blue. Never grey.
-5. **Deep saturated colour** — cobalt skies, acid greens — with whites protected.
+What defines the look, in order of how much it matters:
+
+1. **Thick, two-toned haze.** Amber on the sun side, teal-grey away from it.
+   Trees 100m off are half gone. This is what makes a scatter of pines a forest.
+2. **Backlight.** The sun is about ten degrees up and *ahead* of the start
+   view, so the near side of everything is in cool shade and the haze glows.
+3. **Tall trunks.** Long bare reddish trunks with the crown starting well up
+   them (`tallPineGeo()` in `props.js`) - a colonnade, not a row of cones.
+4. **Dark, busy forest floor.** Needle litter, dirt path with pebbles, tall
+   deep-green grass with warm backlit tips, lupines, ferns.
+5. **Soft light.** The toon ramp is now a smooth 6-step LINEAR ramp - no
+   visible bands.
 
 ## Hard constraints
 
@@ -29,8 +41,14 @@ Assume every player has this.
   performance budget want the same thing. Never reach for PBR "realism" here.
 
 Never use `MeshStandardMaterial` or `MeshPhysicalMaterial`. They are PBR
-(physically based) materials: expensive, and wrong for this style. Use
-`toonMaterial()` from `game/core.js`.
+(physically based) materials and expensive. Use `toonMaterial()` from
+`game/core.js` - its ramp is smooth now, so it reads as soft light, at the
+cost of a single texture lookup.
+
+**The haze is a draw-distance budget.** Nothing past ~200m is visible, so
+LOD hand-overs are pulled in to match (`HAZE_PROC_K` / `HAZE_NATURE_K` in
+`props.js`, the pine bands in `buildTrees()`). If you thin the fog, revisit
+those or distant trees will pop.
 
 ## Where the look actually lives
 
@@ -77,26 +95,27 @@ history that helped was visible in a single screenshot.
 ## Do not touch
 
 - `public/net.js`, `public/voice.js`, `src/` — multiplayer, chat and voice.
-- `game/player.js` — movement feel is settled.
+- `game/player.js` — movement feel is settled. (The camera block at the end
+  of `updatePlayer()` is third person now; the movement above it is unchanged.)
 - Anything under `.backup/`.
 
-## Settled values (do not "improve" these without a screenshot)
-
-Reached by iteration. Each was checked against `inspiration-image/`.
+## Current values (golden-hour forest)
 
 ```
-sun            DirectionalLight 1.95      above ~2.5 the lit ground clips to white
-hemisphere     1.42  sky 0x9fd4ff         this is what makes shadows blue, not black
-ambient        0.46
-toon ramp      darkest rung 150,168,202   any darker and shade goes black
-saturation     1.52 -> 1.10 above 0.66 L
-S-curve mix    0.20                       0.42 was too contrasty
-bloom          0.70
+sun direction   (-0.50, 0.17, -0.85)       low, ahead-right of the walkway at spawn
+sun             DirectionalLight 0xffcf96 2.05
+hemisphere      0.62  sky 0x86a6b0 / ground 0x2e3820
+ambient         0.20
+fog             FogExp2 0xb39e7c 0.0125     (core.js)
+haze            uHazeDens 0.0105, sun (0.98,0.79,0.55), away (0.52,0.57,0.55)  (post.js)
+sky horizon     painted with the SAME two haze colours (sky.js) - keep in step
+toon ramp       6 steps, LINEAR, darkest 104,118,140
+sun shafts      0.55
+camera          third person, 4.3 behind, pivot 1.45 up (player.js)
 ```
 
-Sun brightness and the grade fight each other. If you raise one, lower the other,
-and screenshot. Do not raise both.
-
+Sun brightness and the grade still fight each other. Raise one, lower the
+other, screenshot.
 
 ## Two rules learned the hard way
 

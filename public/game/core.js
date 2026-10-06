@@ -174,6 +174,31 @@ var BROOK_BB = pathBounds(BROOK);
 var WALK_BB = pathBounds(WALKPATH);
 var BEACH_BB = pathBounds(BEACHPATH);
 
+/* ------------------------------------------------------------ the pine wood
+   The golden-hour forest the walk starts in. Spawn sits at (60, 205) and
+   the walkway winds north-west from it, so this is a broad wood centred a
+   little north of spawn, densest in a band either side of the paths (the
+   trunks should frame the walk, as in the reference) and thinning out
+   toward the open country beyond. The sunflower field keeps its clearing.
+   Pure function of x/z, so every browser plants the same wood. */
+var WOOD = { x: 10, z: 120, r: 430 };
+function pathDist(x, z) {
+  return Math.min(pathInfo(WALKPATH, x, z).d, pathInfo(BEACHPATH, x, z).d);
+}
+function pineWood(x, z) {
+  var dx = x - WOOD.x, dz = z - WOOD.z;
+  var core = smoothstep(WOOD.r, WOOD.r * 0.45, Math.sqrt(dx * dx + dz * dz));
+  if (core <= 0) { return 0; }
+  var pd = pathDist(x, z);
+  /* the corridor: thick right up to the path's shoulder, then a looser
+     wood behind it, broken up by noise so it has glades */
+  var lane = smoothstep(55, 9, pd) * 0.55;
+  var body = 0.42 + 0.48 * smoothstep(0.35, 0.65, fbm(x * 0.012 + 3.1, z * 0.012 - 7.4, 3));
+  var sfx = (x - 200) / 235, sfz = (z - 40) / 165;
+  var field = smoothstep(0.85, 1.25, Math.sqrt(sfx * sfx + sfz * sfz));
+  return clamp((lane + body) * core * field, 0, 1);
+}
+
 var CLIFF_S = -377, CLIFF_N = -395;   // the great cliff wall lives between these
 
 /* the cliff meanders - except right at the fall, where the geometry is hand-fitted */
@@ -435,14 +460,21 @@ var shaderMats = [];
 var _toonRamp = null;
 function toonRamp() {
   if (_toonRamp) { return _toonRamp; }
-  /* deep cool shadow -> mid -> bright, then a hot rim step */
-  var d = new Uint8Array([150, 168, 202, 255,
-                          198, 206, 196, 255,
-                          238, 238, 220, 255,
-                          255, 255, 252, 255]);
-  var t = new THREE.DataTexture(d, 4, 1, THREE.RGBAFormat);
-  t.minFilter = THREE.NearestFilter;
-  t.magFilter = THREE.NearestFilter;
+  /* GOLDEN-HOUR FOREST. The look moved from hard anime bands to the soft,
+     backlit light of a misty pine wood at sunset, so the ladder is now a
+     smooth ramp sampled with LINEAR filtering: cool, fairly deep shade
+     rolling into warm light with no visible steps. Still one texture
+     lookup, so it costs exactly what the banded ramp did. The darkest rung
+     stays blue-grey rather than black (see DESIGN-AGENT.md). */
+  var d = new Uint8Array([104, 118, 140, 255,
+                          128, 138, 152, 255,
+                          166, 166, 162, 255,
+                          206, 196, 176, 255,
+                          238, 222, 192, 255,
+                          255, 240, 212, 255]);
+  var t = new THREE.DataTexture(d, 6, 1, THREE.RGBAFormat);
+  t.minFilter = THREE.LinearFilter;
+  t.magFilter = THREE.LinearFilter;
   t.generateMipmaps = false;
   t.needsUpdate = true;
   _toonRamp = t;
@@ -515,10 +547,18 @@ var _m4 = null, _q = null, _e = null, _v3 = null, _pv = null;
 
 function initEngine() {
   THREE.ColorManagement.enabled = false;
-  SUN = new THREE.Vector3(0.30, 0.40, 0.865).normalize();
-  SUNCOL = new THREE.Color(0xfff0c8);
-  FOGCOL = new THREE.Color(0xbfe6f5);
-  FOGDENS = 0.00062;
+  /* A low sun, about ten degrees up, sitting AHEAD of the starting view
+     and a little right of the walkway as it leaves spawn (player.js
+     starts you facing down it), so the wood is backlit: bright
+     haze between the trunks, warm rims on the grass, the near side of
+     everything in cool shade. That backlight is most of the reference. */
+  SUN = new THREE.Vector3(-0.50, 0.17, -0.85).normalize();
+  SUNCOL = new THREE.Color(0xffc98e);
+  /* Fog is the other half: warm, thick, close. Trees a hundred metres off
+     are already half gone, which is what turns a scatter of pines into a
+     forest with depth. */
+  FOGCOL = new THREE.Color(0xb39e7c);
+  FOGDENS = 0.0125;
   _m4 = new THREE.Matrix4(); _q = new THREE.Quaternion();
   _e = new THREE.Euler(); _v3 = new THREE.Vector3(); _pv = new THREE.Vector3();
 
@@ -571,7 +611,7 @@ function initEngine() {
      shade any more, so every surface sits near its lit value. Trimmed
      together rather than just the sun, so the ratio between direct light
      and sky fill is unchanged and the meadow does not go flat. */
-  sunLight = new THREE.DirectionalLight(0xfff4d2, 1.75);
+  sunLight = new THREE.DirectionalLight(0xffcf96, 2.05);
   sunLight.castShadow = false;
   /* A directional light has no position, only a DIRECTION - position minus
      target. The pair used to be dragged along behind the player every
@@ -584,8 +624,10 @@ function initEngine() {
   scene.add(sunLight);
   scene.add(sunLight.target);
   /* low fill is what gives anime art its crisp light/shade split */
-  scene.add(new THREE.HemisphereLight(0x9fd4ff, 0x6fae44, 1.28));
-  scene.add(new THREE.AmbientLight(0xa8d0ee, 0.41));
+  /* Weak, cool fill: the shaded side of a sunset wood is teal-grey and a
+     good deal darker than the lit side. */
+  scene.add(new THREE.HemisphereLight(0x86a6b0, 0x2e3820, 0.62));
+  scene.add(new THREE.AmbientLight(0x6d8290, 0.20));
 }
 
-export { withRim, toonRamp, toonMaterial, VOLC, volcanoBare, volcanoProfile, BEACHPATH, BEACH_BB, BROOK, BROOK_BB, CLIFF_N, CLIFF_S, DEG, FOGCOL, FOGDENS, GLSL_COMMON, HALF, PI, POOL, RIVER, RIVER_BB, SEA, SUN, SUNCOL, TAU, WALKPATH, WALK_BB, WORLD, WSEG, _e, _m4, _pv, _q, _v3, camera, clamp, cliffCrest, cliffWave, cliffZ, clock, commonUniforms, fbm, hash2, initEngine, lerp, mulberry32, pathBounds, pathFar, pathInfo, renderer, ridged, scene, shaderMats, smoothstep, sunLight, terrainHeight, terrainSlope, timeU, vnoise, wallTop };
+export { WOOD, pathDist, pineWood, withRim, toonRamp, toonMaterial, VOLC, volcanoBare, volcanoProfile, BEACHPATH, BEACH_BB, BROOK, BROOK_BB, CLIFF_N, CLIFF_S, DEG, FOGCOL, FOGDENS, GLSL_COMMON, HALF, PI, POOL, RIVER, RIVER_BB, SEA, SUN, SUNCOL, TAU, WALKPATH, WALK_BB, WORLD, WSEG, _e, _m4, _pv, _q, _v3, camera, clamp, cliffCrest, cliffWave, cliffZ, clock, commonUniforms, fbm, hash2, initEngine, lerp, mulberry32, pathBounds, pathFar, pathInfo, renderer, ridged, scene, shaderMats, smoothstep, sunLight, terrainHeight, terrainSlope, timeU, vnoise, wallTop };

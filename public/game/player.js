@@ -6,13 +6,18 @@ import { _e, HALF, camera, clamp, terrainHeight } from './core.js';
 import { onResize } from './post.js';
 import { bridgeY } from './props.js';
 var P = {
-  pos: null, vel: null, yaw: 0.12, pitch: -0.03,
+  pos: null, vel: null, yaw: 0.97, pitch: -0.10,   /* facing down the walkway, into the low sun */
   ground: 0, onGround: true, bob: 0, bobAmt: 0
 };
 
 var keys = {};
 
 var WALK = 4.6, RUN = 9.4, EYE = 1.82;
+/* Third person: the camera orbits a point just above the little one's head,
+   CAM_DIST behind it along the view direction. Looking up swings the camera
+   down toward the grass, which is exactly the "look up through the trees"
+   shot the wood is built for. */
+var CAM_DIST = 4.3, CAM_H = 1.45, CAM_FLOOR = 0.45;
 var TOUCH_LOOK = 0.0055;   /* radians of turn per screen pixel of thumb drag */
 
 /* ---------------------------------------------------------------- who owns
@@ -145,10 +150,19 @@ function updatePlayer(dt) {
   /* The side-to-side roll is what reads as "wobble" and it makes people
      queasy fast. Keep a little vertical bounce for weight, and cut the roll
      to about a third of what it was. */
-  var bobY = Math.sin(P.bob * 2) * 0.034 * P.bobAmt;
-  var bobR = Math.sin(P.bob) * 0.0035 * P.bobAmt;
-  camera.position.set(P.pos.x, P.pos.y + EYE + bobY, P.pos.z);
-  _e.set(P.pitch, P.yaw, bobR, 'YXZ');
+  /* The body does the bobbing now (see blob.js); the camera only follows,
+     with a trace of the step in it so it does not feel bolted on. */
+  var bobY = Math.sin(P.bob * 2) * 0.012 * P.bobAmt;
+  var cp = Math.cos(P.pitch);
+  var fx = -Math.sin(P.yaw) * cp, fy = Math.sin(P.pitch), fz = -Math.cos(P.yaw) * cp;
+  var tx = P.pos.x, ty = P.pos.y + CAM_H + bobY, tz = P.pos.z;
+  var cx = tx - fx * CAM_DIST, cy = ty - fy * CAM_DIST, cz = tz - fz * CAM_DIST;
+  /* never under the ground: on a slope, or looking up, the camera rides up
+     over the grass instead of clipping into the hill */
+  var floor = terrainHeight(cx, cz) + CAM_FLOOR;
+  if (cy < floor) { cy = floor; }
+  camera.position.set(cx, cy, cz);
+  _e.set(P.pitch, P.yaw, 0, 'YXZ');
   camera.quaternion.setFromEuler(_e);
 }
 

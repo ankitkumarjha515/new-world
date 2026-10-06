@@ -1,7 +1,7 @@
 /* Whispering Meadow - terrain.js
    Extracted from the original single file. Logic unchanged. */
 
-import { withRim, toonRamp, BEACHPATH, BROOK, CLIFF_S, HALF, RIVER, VOLC, volcanoBare, WALKPATH, WORLD, WSEG, clamp, cliffWave, cliffZ, fbm, lerp, pathInfo, scene, smoothstep, terrainHeight, timeU, wallTop } from './core.js';
+import { pineWood, withRim, toonRamp, BEACHPATH, BROOK, CLIFF_S, HALF, RIVER, VOLC, volcanoBare, WALKPATH, WORLD, WSEG, clamp, cliffWave, cliffZ, fbm, lerp, pathInfo, scene, smoothstep, terrainHeight, timeU, wallTop } from './core.js';
 import { grassTexture } from './textures.js';
 var terrainHeights, depthTex;
 
@@ -93,6 +93,18 @@ function terrainColorAt(x, z, h, ny, out, o) {
   r = lerp(r, 0.64, sfm); g = lerp(g, 0.70, sfm); b = lerp(b, 0.18, sfm);
   r += (n3 - 0.5) * 0.035; g += (n3 - 0.5) * 0.04; b += (n3 - 0.5) * 0.025;
 
+  /* --- the pine wood floor -------------------------------------------
+     Under the trees the ground is not meadow: it is needle-litter and moss,
+     darker, browner, and patchy. Most of what makes the wood read as a
+     wood at your feet. */
+  var wood = pineWood(x, z);
+  if (wood > 0.001) {
+    var litter = fbm(x * 0.045 + 9.3, z * 0.045 - 1.2, 3);
+    var fr = lerp(0.17, 0.27, litter), fg = lerp(0.22, 0.25, litter), fb = lerp(0.10, 0.12, litter);
+    var wm = smoothstep(0.05, 0.55, wood) * 0.85;
+    r = lerp(r, fr, wm); g = lerp(g, fg, wm); b = lerp(b, fb, wm);
+  }
+
   /* --- the cobblestone garden walkway & beach path (Images 4 & 5) ----- */
   var wp = pathInfo(WALKPATH, x, z);
   var bp = pathInfo(BEACHPATH, x, z);
@@ -103,7 +115,9 @@ function terrainColorAt(x, z, h, ny, out, o) {
     /* Was 0.85-0.94, and the dapple below pushed it past 1.0 - pure white
        glare once the grade hits it. Under this colour grade, no ground
        albedo should go above about 0.72. */
-    var sr2 = lerp(0.60, 0.70, stoneF), sg2 = lerp(0.57, 0.66, stoneF), sb2 = lerp(0.51, 0.59, stoneF);
+    /* Forest-floor dirt now, not garden stone: the shader paints the
+       crisp edge and the pebbles, this is the colour it settles to far off */
+    var sr2 = lerp(0.30, 0.38, stoneF), sg2 = lerp(0.22, 0.28, stoneF), sb2 = lerp(0.15, 0.19, stoneF);
     // dappled sunlit tree shadow effect on stones
     var dapple = fbm(x * 0.085 + 2.1, z * 0.085 - 1.7, 2);
     var dappleM = 0.80 + 0.20 * dapple;   /* never exceeds 1.0 */
@@ -416,6 +430,79 @@ var LAVA_GLSL = [
 
 /* hardware-optimized terrain material: replaces heavy 4-octave procedural hash with sine micro-detail */
 
+/* ======================================================================== *
+ *  THE DIRT PATH, painted per pixel
+ *
+ *  The ground's vertex colours sit on a 6.25-unit grid, which is coarser
+ *  than the path is wide - so a path painted there comes out as a soft
+ *  smear. The walk is the centre of every frame in the forest, so it is
+ *  drawn in the fragment shader instead: the exact distance to the two
+ *  authored spines, a ragged edge, dark packed earth, scattered pebbles and
+ *  leaf litter. Sixteen segment tests, run only on triangles the vertex
+ *  shader has already found to be within 14 units of the path.
+ * ======================================================================== */
+var PATH_SEGS = (WALKPATH.length - 1) + (BEACHPATH.length - 1);
+function pathSegments() {
+  var out = [];
+  [WALKPATH, BEACHPATH].forEach(function (P) {
+    for (var i = 0; i < P.length - 1; i++) {
+      out.push(new THREE.Vector4(P[i].x, P[i].z, P[i + 1].x, P[i + 1].z));
+    }
+  });
+  return out;
+}
+var PATH_GLSL = [
+  'float pathDist(vec2 p){',
+  '  float best = 1e9;',
+  '  for (int i = 0; i < ' + PATH_SEGS + '; i++) {',
+  '    vec4 s = uPathSeg[i];',
+  '    vec2 a = s.xy, ab = s.zw - s.xy;',
+  '    float t = clamp(dot(p - a, ab) / dot(ab, ab), 0.0, 1.0);',
+  '    best = min(best, length(p - (a + ab * t)));',
+  '  }',
+  '  return best;',
+  '}',
+  /* cheap cellular noise for pebbles: distance to a jittered point per cell */
+  'vec2 _ph2(vec2 p){ p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));',
+  '  return fract(sin(p) * 43758.5453); }',
+  'float pebbles(vec2 p, out float id){',
+  '  vec2 i = floor(p), f = fract(p); float d = 8.0; id = 0.0;',
+  '  for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {',
+  '    vec2 g = vec2(float(x), float(y)); vec2 o = _ph2(i + g);',
+  '    float dd = length(g + o - f);',
+  '    if (dd < d) { d = dd; id = o.x; }',
+  '  }',
+  '  return d;',
+  '}',
+  ''
+].join('\n');
+var PATH_PAINT = [
+  ' if (vPathNear > 0.5) {',
+  '   float _pd = pathDist(vGWP.xz);',
+  '   float _wob = (_gn(vGWP.xz * 0.35) - 0.5) * 1.3 + (_gn(vGWP.xz * 1.7 + 3.0) - 0.5) * 0.45;',
+  '   float _pm = smoothstep(2.75, 2.05, _pd + _wob);',
+  '   if (_pm > 0.0) {',
+  /* packed earth, darker and damper in the middle where it is walked */
+  '     float _soil = _gn(vGWP.xz * 0.9 + 7.0);',
+  '     vec3 _dirt = mix(vec3(0.20, 0.14, 0.09), vec3(0.34, 0.25, 0.16), _soil);',
+  '     _dirt *= mix(0.86, 1.0, smoothstep(0.0, 1.6, _pd));',
+  /* pebbles: small, pale, rounded, thicker toward the edges */
+  '     float _pid; float _pc = pebbles(vGWP.xz * 6.5, _pid);',
+  '     float _pr = mix(0.14, 0.36, fract(_pid * 7.3));',
+  '     float _peb = smoothstep(_pr, _pr - 0.08, _pc) * step(0.30, fract(_pid * 13.1));',
+  '     _peb *= 0.55 + 0.45 * smoothstep(0.3, 2.2, _pd);',
+  '     vec3 _stone = mix(vec3(0.30, 0.25, 0.20), vec3(0.50, 0.45, 0.38), fract(_pid * 3.7));',
+  '     _stone *= 0.80 + 0.35 * smoothstep(_pr, 0.0, _pc);',
+  '     _dirt = mix(_dirt, _stone, _peb);',
+  /* dry needles and leaf litter, a darker speckle */
+  '     float _lit = _gn(vGWP.xz * 5.5 + 1.7);',
+  '     _dirt = mix(_dirt, vec3(0.13, 0.09, 0.06), smoothstep(0.62, 0.78, _lit) * (1.0 - _peb) * 0.7);',
+  '     diffuseColor.rgb = mix(diffuseColor.rgb, _dirt, _pm);',
+  '   }',
+  ' }',
+  ''
+].join('\n');
+
 function groundMaterial() {
   var m = withRim(new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: toonRamp() }), 0.20);
   /* withRim() already installed an onBeforeCompile. Assigning a new one here
@@ -429,19 +516,25 @@ function groundMaterial() {
        resolves into a visible repeat. */
     sh.uniforms.uGrassTex = { value: grassTexture() };
     sh.uniforms.uTime = timeU;
+    sh.uniforms.uPathSeg = { value: pathSegments() };
     /* The cone's footprint, resolved in the VERTEX shader into a single
        float. Every fragment outside it then skips the whole lava block on a
        branch the hardware takes coherently - the volcano covers one corner
        of the world, so a given triangle is either in it or nowhere near it,
        and warps do not diverge. That is what keeps a full-screen ground
        shader from paying for a mountain that is usually off camera. */
-    sh.vertexShader = 'varying vec3 vGWP;\nvarying float vVolc;\n' + sh.vertexShader.replace(
+    sh.vertexShader = 'varying vec3 vGWP;\nvarying float vVolc;\nvarying float vPathNear;\n' +
+      'uniform vec4 uPathSeg[' + PATH_SEGS + '];\n' + PATH_GLSL + sh.vertexShader.replace(
       '#include <begin_vertex>',
       '#include <begin_vertex>\n vGWP = (modelMatrix * vec4(position,1.0)).xyz;\n' +
+      /* coarse, per vertex: is this triangle anywhere near the path? The
+         fragment shader only runs the exact sweep when it is. */
+      ' vPathNear = 1.0 - step(14.0, pathDist(vGWP.xz));\n' +
       ' vVolc = 1.0 - smoothstep(' + (VOLC.r * 0.80).toFixed(1) + ', ' + VOLC.r.toFixed(1) +
       ', length(vGWP.xz - vec2(' + VOLC.x.toFixed(1) + ', ' + VOLC.z.toFixed(1) + ')));'
     );
-    sh.fragmentShader = 'varying vec3 vGWP;\nvarying float vVolc;\nuniform sampler2D uGrassTex;\nuniform float uTime;\n' +
+    sh.fragmentShader = 'varying vec3 vGWP;\nvarying float vVolc;\nvarying float vPathNear;\nuniform sampler2D uGrassTex;\nuniform float uTime;\n' +
+      'uniform vec4 uPathSeg[' + PATH_SEGS + '];\n' + PATH_GLSL +
       /* hash value-noise, NOT sin(x)*cos(y) - that expression IS a
          checkerboard (see DESIGN-AGENT.md and the water shaders below) and
          the previous dapple term used it, at low amplitude but still a grid.
@@ -467,6 +560,7 @@ function groundMaterial() {
         ' float _brush = _gn(vGWP.xz * 0.028) * 0.6 + _gn(vGWP.xz * 0.11 + 5.2) * 0.4;\n' +
         ' float _dtl = (_brush - 0.5) * 0.10;\n' +
         ' diffuseColor.rgb = clamp(diffuseColor.rgb * (_tex * 1.55 + 0.30) * (1.0 + _dtl), 0.0, 1.0);\n' +
+        PATH_PAINT +
         LAVA_GLSL
       ).replace(
         '#include <dithering_fragment>',
@@ -481,7 +575,7 @@ function groundMaterial() {
         '#include <dithering_fragment>'
       );
   };
-  m.customProgramCacheKey = function () { return 'ground-painted-volcano'; };
+  m.customProgramCacheKey = function () { return 'ground-painted-volcano-path'; };
   return m;
 }
 

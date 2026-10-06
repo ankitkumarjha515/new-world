@@ -135,9 +135,13 @@ function setupPost() {
          meadow goes milky, while this term only bites past a few hundred
          units. See the note in the shader. */
       uHaze: { value: 1.0 },
-      uHazeDens: { value: 0.00060 },
-      uHazeCol: { value: new THREE.Color(0.800, 0.892, 0.972) },
-      uHazeSun: { value: new THREE.Color(0.985, 0.938, 0.842) }
+      /* Golden-hour forest haze: thick, and strongly two-toned - burning
+         amber in the half of the frame the sun is in, a cool teal-grey in
+         the other half. This is what makes trunks forty metres off read as
+         soft silhouettes standing in light. */
+      uHazeDens: { value: 0.0105 },
+      uHazeCol: { value: new THREE.Color(0.52, 0.57, 0.55) },
+      uHazeSun: { value: new THREE.Color(0.98, 0.79, 0.55) }
     },
     vertexShader: VERT_FS,
     fragmentShader: [
@@ -176,8 +180,10 @@ function setupPost() {
       '    float t = vz * uHazeDens;',
       '    float a = (1.0 - exp(-t * t)) * uHaze;',
       '    a *= smoothstep(3600.0, 2600.0, vz);',
-      '    vec3 hz = mix(uHazeSun, uHazeCol, smoothstep(0.06, 0.60, distance(vUv, uSunUV)));',
-      '    c = mix(c, hz, clamp(a, 0.0, 1.0));',
+      '    vec3 hz = mix(uHazeSun, uHazeCol, smoothstep(0.04, 0.95, distance(vUv, uSunUV)));',
+      /* capped short of 1, so the farthest ridges keep a ghost of their
+         relief instead of going to a flat cut-out */
+      '    c = mix(c, hz, clamp(a, 0.0, 0.86));',
       '  }',
       '',
       '  /* ---- anime landscape grade -------------------------------------',
@@ -211,7 +217,7 @@ function setupPost() {
       '     to the one band that already had far too much of it, which is why the',
       '     meadow stayed fluorescent no matter what the rest of the grade did.',
       '     Near-whites are protected last so clouds stay white. */',
-      '  float sat = mix(1.06, 0.78, gW);',
+      '  float sat = mix(1.04, 0.92, gW);',
       '  sat = mix(sat, 1.06, smoothstep(0.66, 1.0, l));',
       '  c = mix(vec3(l), c, sat);',
       '',
@@ -235,12 +241,12 @@ function setupPost() {
       '     operation that can actually move the hue. Lit greens go the other',
       '     way, toward warm yellow-olive. */',
       '  c += vec3( 0.070, 0.010, -0.045) * gW * litW;',
-      '  c += vec3(-0.032, 0.006,  0.078) * gW * shdW;',
+      '  c += vec3(-0.012, 0.004,  0.026) * gW * shdW;',
       '',
       '  /* split tone: sunlight goes gold, shadow goes blue. This single',
       '     step does more for the anime feel than anything else here. */',
-      '  vec3 warm = vec3(1.045, 1.005, 0.930);',
-      '  vec3 cool = vec3(0.930, 0.972, 1.075);',
+      '  vec3 warm = vec3(1.070, 1.000, 0.880);',
+      '  vec3 cool = vec3(0.900, 0.975, 1.060);',
       '  c *= mix(cool, warm, smoothstep(0.18, 0.78, l2));',
       '',
       '  /* a breath of sky bounce in the darkest places, never pure black.',
@@ -248,7 +254,9 @@ function setupPost() {
       '  c += vec3(0.010, 0.016, 0.030) * shdW;',
       '',
       '  float d = length(vUv - 0.5);',
-      '  c *= mix(0.82, 1.0, smoothstep(1.02, 0.30, d));',
+      /* heavy, warm-black vignette: the reference frames are dark at the
+         corners and near the ground, and bright only in the haze */
+      '  c *= mix(vec3(0.42, 0.40, 0.38), vec3(1.0), smoothstep(0.98, 0.22, d));',
       '  c = mix(c, vec3(0.0), uFade);',
       '  gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);',
       '}'

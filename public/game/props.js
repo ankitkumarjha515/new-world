@@ -1,7 +1,7 @@
 /* Whispering Meadow - props.js
    Extracted from the original single file. Logic unchanged. */
 
-import { withRim, toonRamp, BEACHPATH, BROOK, HALF, PI, RIVER, SUN, TAU, WALKPATH, WORLD, WSEG, clamp, fbm, lerp, mulberry32, pathInfo, scene, smoothstep, terrainHeight, timeU, vnoise, volcanoBare } from './core.js';
+import { WOOD, pathDist, pineWood, withRim, toonRamp, BEACHPATH, BROOK, HALF, PI, RIVER, SUN, TAU, WALKPATH, WORLD, WSEG, clamp, fbm, lerp, mulberry32, pathInfo, scene, smoothstep, terrainHeight, timeU, vnoise, volcanoBare } from './core.js';
 import { GB, M4, siteInfo } from './geom.js';
 import { addOutline } from './outline.js';
 import { NATURE_BANDS, LOD_BANDS, LOD_K, propExtent, rungFor, rungForProp, rungForGeometry, setNatureLODScale, bakeGeoImpostors, buildNatureImpostors, impostorGeometry, natureImpostorMaterial, natureMaterial, natureSwapImpostors, patchNatureShader, preloadNature } from './models.js';
@@ -427,6 +427,67 @@ function pineGeo(seed) {
   return gb.build();
 }
 
+/* ------------------------------------------------------------ the tall pine
+   The trees of the golden-hour wood. What makes a forest of these read the
+   way the reference does is the TRUNK: a long, bare, reddish column with the
+   crown only starting well up it, so from the path you see a colonnade of
+   trunks standing in haze, and the needles close over overhead. The crown
+   is whorls of drooping, flattened needle clumps (the lobed 20-triangle
+   blobs the broadleaf canopy uses), longest at the bottom of the crown and
+   shrinking to a spire. A few dead stubs on the lower trunk, because real
+   pines in a crowded wood shed their low branches and keep the stumps. */
+function tallPineGeo(seed, lod) {
+  /* lod 1 is the far twin: the same trunk and the same crown envelope from
+     the same seed, but six whorls of four big clumps instead of thirteen of
+     six to eight - about a fifth of the triangles, for trees past ~65m that
+     are half lost in the haze anyway. */
+  var far = lod === 1;
+  var rng = mulberry32(seed);
+  var gb = new GB();
+  var H = 19 + rng() * 5;
+  var bark = new THREE.Color(0x5b3526);
+  gb.add(new THREE.CylinderGeometry(0.15, 0.42, H, 7, 6, true), M4(0, H / 2, 0), bark, 0.08, rng);
+  /* root flare */
+  gb.add(new THREE.CylinderGeometry(0.42, 0.62, 0.7, 7, 1, true), M4(0, 0.35, 0), bark, 0.06, rng);
+  var stub = new THREE.CylinderGeometry(0.025, 0.06, 1, 4, 1, true);
+  stub.translate(0, 0.5, 0);
+  var crownStart = H * (0.40 + rng() * 0.08);
+  for (var d = 0; d < 7; d++) {
+    var dy = 2.5 + rng() * (crownStart - 3);
+    var da = rng() * TAU, dl = 0.5 + rng() * 0.9;
+    gb.add(stub, M4(Math.cos(da) * 0.22, dy, Math.sin(da) * 0.22, 0, -da, -1.25 - rng() * 0.3, 1, dl, 1),
+      new THREE.Color(0x3b2a20), 0.05, rng);
+  }
+  var clumps = [blobGeo(1, seed + 1, 0), blobGeo(1, seed + 7, 0), blobGeo(1, seed + 13, 0)];
+  var W = far ? 6 : 13;
+  for (var i = 0; i < W; i++) {
+    var t = i / (W - 1);
+    var y = crownStart + t * (H - crownStart - 0.8);
+    var L = Math.pow(1 - t, 0.85) * 3.1 + 0.45;
+    var m = far ? 4 : 5 + Math.floor(rng() * 3);
+    for (var j = 0; j < m; j++) {
+      var a = j / m * TAU + rng() * 0.7 + i * 0.9;
+      var ca = Math.cos(a), sa = Math.sin(a);
+      var n = (!far && L > 1.6) ? 2 : 1;
+      for (var k = 0; k < n; k++) {
+        var f = n === 1 ? 0.75 : (k === 0 ? 0.42 : 0.92);
+        var dist = L * f;
+        var r = (0.45 + L * 0.2 * (k === 0 && n === 2 ? 1.1 : 0.85)) * (far ? 1.45 : 1);
+        /* dark and cool inside the crown, a touch lighter and warmer at
+           the tips and toward the top, where the low sun gets at it */
+        var c = new THREE.Color().setHSL(0.29 + rng() * 0.03, 0.34 + rng() * 0.1, 0.105 + t * 0.06 + f * 0.035);
+        gb.add(clumps[(i + j + k) % 3],
+          M4(ca * dist, y - dist * 0.22 + (rng() - 0.5) * 0.25, sa * dist, 0, -a, -0.18,
+             r * 1.45, r * 0.42, r * 0.95),
+          c, 0.04, rng);
+      }
+    }
+  }
+  /* the leader */
+  gb.add(new THREE.ConeGeometry(0.45, 2.2, 6), M4(0, H + 0.2, 0), new THREE.Color().setHSL(0.30, 0.36, 0.16), 0.03, rng);
+  return gb.build();
+}
+
 function bushGeo(seed) {
   var rng = mulberry32(seed);
   var gb = new GB();
@@ -778,15 +839,25 @@ var PROC_FAR_OUT = [980, 1150];
 /* The hand-written trees' own hand-over, scaled alongside the modelled ones.
    Same in-place mutation for the same reason: PROC_NEAR.out and PROC_FAR.in
    are both this array. */
+/* The golden-hour haze (core.js FOGDENS, post.js uHazeDens) swallows
+   everything past about 200m, so detail tuned for a clear midday out to
+   700m was being spent on trees nobody could see - 800k triangles of them
+   from the spawn view alone. These pull every hand-over in to where the
+   haze actually ends. The hand-written trees go furthest (they have a
+   billboard to fall back on); the modelled ladder less so, because its
+   bottom rungs are the flowers and ferns right around you. Change the fog,
+   revisit these. */
+var HAZE_PROC_K = 0.30, HAZE_NATURE_K = 0.55;
 function setPropLODScale(k) {
-  PROC_HANDOVER[0] = Math.round(PROC_HANDOVER[0] * k);
-  PROC_HANDOVER[1] = Math.round(PROC_HANDOVER[1] * k);
-  PROC_FAR_OUT[0] = Math.round(PROC_FAR_OUT[0] * k);
-  PROC_FAR_OUT[1] = Math.round(PROC_FAR_OUT[1] * k);
+  var kp = k * HAZE_PROC_K;
+  PROC_HANDOVER[0] = Math.round(PROC_HANDOVER[0] * kp);
+  PROC_HANDOVER[1] = Math.round(PROC_HANDOVER[1] * kp);
+  PROC_FAR_OUT[0] = Math.round(PROC_FAR_OUT[0] * kp);
+  PROC_FAR_OUT[1] = Math.round(PROC_FAR_OUT[1] * kp);
   /* SMALL_SCATTER is no longer scaled here. Its two bands ARE ladder rungs
      now, and setNatureLODScale scales the whole ladder - doing it here as
      well would square the factor for the flowers alone. */
-  setNatureLODScale(k);
+  setNatureLODScale(k * HAZE_NATURE_K);
 }
 var PROC_NEAR = { key: 'p', level: 0, in: [-2, -1], out: PROC_HANDOVER };
 var PROC_FAR = { key: 'P', level: 2, in: PROC_HANDOVER, out: PROC_FAR_OUT };
@@ -1303,11 +1374,9 @@ function buildTrees() {
     seed: 21, props: ['blossom_a', 'blossom_b'], sway: 0.20, bury: 0.03,
     fallback: function () { return { geo: sakuraGeo(44), mat: proceduralLeafMat() }; },
     tries: 9000, max: 165, range: SCAT_R,
-    prob: function (x, z) {
-      var pd = Math.min(pathInfo(WALKPATH, x, z).d, pathInfo(BEACHPATH, x, z).d);
-      var nearPath = smoothstep(60, 8, pd) * 0.88;
-      return nearPath + 0.10 * forestDensity(x, z);
-    },
+    /* The pink avenue along the walk is gone: the walk runs through a
+       pine wood now. A few blossom trees survive out in the far woods. */
+    prob: function (x, z) { return 0.10 * forestDensity(x, z) * (1 - pineWood(x, z)); },
     accept: function (x, z, si, rng) {
       if (si.water || si.h < 3.5 || si.h > 180 || si.slope > 0.55) return false;
       if (pathInfo(WALKPATH, x, z).d < 4.5 || pathInfo(BEACHPATH, x, z).d < 4.5) return false;
@@ -1324,10 +1393,7 @@ function buildTrees() {
     matSwap: { Leaves_TwistedTree: 'Leaves_TwistedGreen' },
     fallback: function () { return { geo: broadleafGeo(77, true), mat: proceduralLeafMat() }; },
     tries: 10000, max: 300, range: SCAT_R,
-    prob: function (x, z) {
-      var pd = Math.min(pathInfo(WALKPATH, x, z).d, pathInfo(BEACHPATH, x, z).d);
-      return smoothstep(80, 10, pd) * 0.34 + forestDensity(x, z) * 0.72;
-    },
+    prob: function (x, z) { return forestDensity(x, z) * 0.72 * (1 - 0.8 * pineWood(x, z)); },
     accept: function (x, z, si, rng) {
       if (si.water || si.h < 3.5 || si.h > 180 || si.slope > 0.55) return false;
       if (pathInfo(WALKPATH, x, z).d < 4.5 || pathInfo(BEACHPATH, x, z).d < 4.5) return false;
@@ -1348,6 +1414,42 @@ function buildTrees() {
     },
     scale: function (r) { return 0.8 + r() * 0.75; },
     tilt: 0.05, sink: -0.3, shadow: true
+  });
+  /* THE PINE WOOD. Tall - 14 to 27 metres - so that from the path you
+     look up at trunks and the crowns close over into the haze, which is
+     the whole picture in the reference. Kept off the path itself and its
+     shoulder, so the walk stays a clear lane between the trunks. */
+  /* Under this much haze nothing past ~180m is visible at all (the fog is
+     past 98% there), so the trees
+     dither out there and simply stop - no billboard stage needed. Two
+     variants, so neighbours are not clones. */
+  var PINE_NEAR = { key: 'tp', level: 0, in: [-2, -1], out: [58, 72] };
+  var PINE_FAR = { key: 'tP', level: 1, in: [58, 72], out: [140, 170] };
+  var pineNearMat = proceduralLeafMat(PINE_NEAR), pineFarMat = proceduralLeafMat(PINE_FAR);
+  var pineOpts = {
+    tries: 13000, max: 760, range: WOOD.r, cx: WOOD.x, cz: WOOD.z,
+    prob: pineWood,
+    accept: function (x, z, si, rng) {
+      if (si.water || si.h < 2.5 || si.slope > 0.8) return false;
+      if (si.riverD < 30) return false;
+      if (pathDist(x, z) < 6.5) return false;
+      return true;
+    },
+    scale: function (r) { var t = r(); return 0.8 + t * t * 0.55; },
+    tilt: 0.025, sink: -0.3, shadow: true
+  };
+  /* One placement, two meshes: full detail close, the light twin beyond,
+     cross-dithered over 58-72m so the swap never pops. */
+  [[15, 301], [17, 733]].forEach(function (sv) {
+    var placed = placeProps(Object.assign({ seed: sv[0] }, pineOpts));
+    if (!placed) { return; }
+    /* small cells: a bucket is culled whole, so tight buckets are what
+       actually keep trees behind you and past the haze off the GPU */
+    var near = emitInstances(tallPineGeo(sv[1], 0), pineNearMat, placed.mats, placed.cols, 40, true);
+    var farM = emitInstances(tallPineGeo(sv[1], 1), pineFarMat, placed.mats, placed.cols, 60, true);
+    cullBand(near, PINE_NEAR);
+    cullBand(farM, PINE_FAR);
+    SCATTERED[sv[0]] = { mats: placed.mats, meshes: near.concat(farM), bulk: 22 };
   });
   /* ------------------------------------------------------------------
      The hand-written trees, planted BESIDE the models rather than replaced
@@ -1393,10 +1495,7 @@ function buildTrees() {
   scatter({
     seed: 51, geo: gSakura, mat: procLeaf, impostor: procImp(0),
     tries: 9000, max: 300, range: SCAT_R,
-    prob: function (x, z) {
-      var pd = Math.min(pathInfo(WALKPATH, x, z).d, pathInfo(BEACHPATH, x, z).d);
-      return smoothstep(90, 10, pd) * 0.55 + forestDensity(x, z) * 0.60;
-    },
+    prob: function (x, z) { return forestDensity(x, z) * 0.35 * (1 - pineWood(x, z)); },
     accept: okTree, scale: function (r) { return 0.88 + r() * 0.62; },
     tilt: 0.07, sink: -0.22, shadow: true
   });
@@ -1437,6 +1536,23 @@ function buildTrees() {
     scale: function (r) { return 0.7 + r() * 0.9; },
     tilt: 0.14, sink: -0.15, shadow: false
   });
+  /* Ferns along the path shoulders and through the pine wood floor. */
+  natureScatter({
+    seed: 16, props: ['fern_a'], sway: 0.10, bury: 0.04,
+    fallback: function () { return { geo: bushGeo(91), mat: proceduralLeafMat() }; },
+    tries: 9000, max: 650, range: WOOD.r, cx: WOOD.x, cz: WOOD.z,
+    prob: function (x, z) {
+      var pd = pathDist(x, z);
+      return pineWood(x, z) * (0.12 + 0.88 * smoothstep(12, 3.5, pd) * smoothstep(2.2, 3.2, pd));
+    },
+    accept: function (x, z, si, rng) {
+      if (si.water || si.h < 2.0 || si.slope > 0.8) return false;
+      if (pathDist(x, z) < 2.9) return false;
+      return true;
+    },
+    scale: function (r) { return 0.55 + r() * 0.7; },
+    tilt: 0.12, sink: -0.1, shadow: false
+  });
 }
 
 function flowerGeo(seed) {
@@ -1457,7 +1573,78 @@ function flowerGeo(seed) {
   return gb.build();
 }
 
+/* A lupine: a leafy foot, a stem, and a tall tapering spike of little
+   rounded florets. Coloured white here so the per-instance colour carries
+   the purple / pale-pink of each plant; the florets darken toward the base
+   and the tip stays pale, which is what lupines actually do. */
+function lupineGeo(seed) {
+  var rng = mulberry32(seed);
+  var gb = new GB();
+  var leaf = new THREE.Color(0x3d6a2c);
+  gb.add(new THREE.CylinderGeometry(0.018, 0.026, 1.0, 4, 1, true), M4(0, 0.5, 0), leaf, 0.04, rng);
+  /* palmate leaves at the foot */
+  var blade = new THREE.ConeGeometry(0.05, 0.36, 3);
+  for (var j = 0; j < 7; j++) {
+    var a = j / 7 * TAU + rng() * 0.4;
+    gb.add(blade, M4(Math.cos(a) * 0.14, 0.10, Math.sin(a) * 0.14, PI / 2 - 0.35, -a + PI / 2, 0, 1, 1, 0.35), leaf, 0.06, rng);
+  }
+  var bud = new THREE.IcosahedronGeometry(0.06, 0);
+  var N = 22;
+  for (var i = 0; i < N; i++) {
+    var t = i / (N - 1);
+    var y = 0.48 + t * 0.62;
+    var rad = 0.085 * (1 - t * 0.75);
+    var ang = i * 2.39996;
+    var shade = 0.62 + t * 0.38;
+    var c = new THREE.Color(shade, shade, shade);
+    var sc = 1.05 - t * 0.55;
+    gb.add(bud, M4(Math.cos(ang) * rad, y, Math.sin(ang) * rad, 0, ang, 0, sc, sc * 0.8, sc), c, 0.05, rng);
+  }
+  return gb.build();
+}
+
+function buildLupines() {
+  var mat = swayMaterial(0.07, SMALL_SCATTER.flower);
+  /* deep violet, blue-violet, and the pale shell-pink ones */
+  var palette = [0x5a3ea8, 0x6d4bc4, 0x4c3a9e, 0x8a62d0, 0xe2c4bc, 0xd8b6b0];
+  var rng = mulberry32(919);
+  var mats = [], cols = [];
+  var m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler();
+  var pos = new THREE.Vector3(), scl = new THREE.Vector3();
+  /* clumps, mostly along the path shoulders, some deeper in the wood */
+  for (var c = 0; c < 900 && mats.length < 2600; c++) {
+    var x = WOOD.x + (rng() * 2 - 1) * WOOD.r, z = WOOD.z + (rng() * 2 - 1) * WOOD.r;
+    var w = pineWood(x, z);
+    var pd = pathDist(x, z);
+    var want = w * (0.25 + 0.75 * smoothstep(16, 4, pd));
+    var col = new THREE.Color(palette[Math.floor(rng() * palette.length)]);
+    var n = 3 + Math.floor(rng() * 7);
+    var cr = 0.8 + rng() * 2.2;
+    if (rng() > want) { continue; }
+    for (var k = 0; k < n; k++) {
+      var a = rng() * TAU, rr = Math.sqrt(rng()) * cr;
+      var px = x + Math.cos(a) * rr, pz = z + Math.sin(a) * rr;
+      var s = 0.75 + rng() * 0.75;
+      var tilt = (rng() - 0.5) * 0.22;
+      var v = 0.85 + rng() * 0.3;
+      if (pathDist(px, pz) < 2.9) { continue; }
+      var si = siteInfo(px, pz);
+      if (si.water || si.slope > 0.7 || si.h < 2) { continue; }
+      pos.set(px, groundY(px, pz) - 0.03, pz);
+      e.set(tilt, rng() * TAU, tilt * 0.6, 'YXZ');
+      q.setFromEuler(e); scl.set(s, s * (0.85 + rng() * 0.45), s);
+      m4.compose(pos, q, scl);
+      mats.push(m4.clone());
+      cols.push(col.clone().multiplyScalar(v));
+    }
+  }
+  if (mats.length) {
+    cullBand(emitInstances(lupineGeo(4242), mat, mats, cols, 120, false), SMALL_SCATTER.flower);
+  }
+}
+
 function buildFlowers() {
+  buildLupines();
   var mat = swayMaterial(0.10, SMALL_SCATTER.flower);
   /* vivid anime wildflower field palette (Images 3 & 5) */
   var palette = [
@@ -1496,6 +1683,8 @@ function buildFlowers() {
       var x = P.x + Math.cos(a) * rr, z = P.z + Math.sin(a) * rr;
       var si = siteInfo(x, z);
       if (si.water || si.h < 2.4 || si.h > 170 || si.slope > 0.55 || si.riverD < 42) continue;
+      /* the cosmos and daisies belong to the open meadow, not the pine wood */
+      if (pineWood(x, z) > 0.2) continue;
       var s = 0.85 + rng() * 0.9;
       pos.set(x, groundY(x, z) - 0.04, z);
       e.set((rng() - 0.5) * 0.3, rng() * TAU, (rng() - 0.5) * 0.3, 'YXZ');

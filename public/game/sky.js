@@ -14,10 +14,12 @@ function buildSky() {
   var mat = new THREE.ShaderMaterial({
     side: THREE.BackSide, depthWrite: false, fog: false,
     uniforms: commonUniforms({
-      uZenith: { value: new THREE.Color(0x0a3f92) },   /* deeper cobalt overhead - was 0x0d5fbe */
-      uMid: { value: new THREE.Color(0x2f86e0) },      /* richer, less washed - was 0x4aa8f0 */
-      uHorizon: { value: new THREE.Color(0xd6f2fb) },  /* pale, almost white */
-      uWarm: { value: new THREE.Color(0xffe8ba) }
+      /* Golden hour through haze: a dusky teal overhead, washing down to a
+         warm amber horizon, with the sun burning a big soft hole in it. */
+      uZenith: { value: new THREE.Color(0x2f5d72) },
+      uMid: { value: new THREE.Color(0x7e9a98) },
+      uHorizon: { value: new THREE.Color(0xa9a48e) },
+      uWarm: { value: new THREE.Color(0xffb766) }
     }),
     vertexShader: [
       'varying vec3 vDir;',
@@ -39,12 +41,20 @@ function buildSky() {
       '  col = mix(uHorizon*0.96, col, smoothstep(-0.10, 0.04, h));',
       '  float sd = dot(d, normalize(uSun));',
       '  float sm = max(sd, 0.0);',
-      '  col += uWarm * pow(sm, 4.0) * 0.20;',
-      '  col += uWarm * pow(sm, 80.0) * 0.48;',
-      '  float disc = smoothstep(0.99970, 0.99992, sd);',
-      '  col = mix(col, vec3(0.99, 0.97, 0.90), disc * 0.80);',
-      '  float band = pow(1.0 - abs(h), 7.0) * (sm*0.45 + 0.55);',
-      '  col = mix(col, uWarm, band * 0.24);',
+      '  col += uWarm * pow(sm, 3.0) * 0.42;',
+      '  col += uWarm * pow(sm, 24.0) * 0.55;',
+      '  col += vec3(1.0, 0.92, 0.78) * pow(sm, 400.0) * 0.9;',
+      '  float disc = smoothstep(0.99930, 0.99975, sd);',
+      '  col = mix(col, vec3(1.0, 0.96, 0.86), disc * 0.95);',
+      '  float band = pow(1.0 - abs(h), 5.0) * (sm*0.60 + 0.40);',
+      '  col = mix(col, uWarm, band * 0.34);',
+      /* The low sky IS the haze. post.js tints distant land toward a warm
+         amber on the sun side and a teal-grey away from it; the horizon here
+         is painted the same two colours, so the far hills and the cliff
+         dissolve into the sky instead of standing in front of it as a flat
+         cut-out. Keep these two in step with uHazeSun / uHazeCol there. */
+      '  vec3 hazeCol = mix(vec3(0.52, 0.57, 0.55), vec3(0.98, 0.79, 0.55), pow(sd * 0.5 + 0.5, 2.5));',
+      '  col = mix(col, hazeCol, pow(1.0 - clamp(h, 0.0, 1.0), 7.0) * 0.95);',
       '  col += (h21(gl_FragCoord.xy) - 0.5) * 0.005;',
       '  gl_FragColor = vec4(col, 1.0);',
       '}'
@@ -214,10 +224,11 @@ function buildClouds() {
          a painted cumulus look solid is a lit top, a mid tone on the
          shoulder and a properly grey underside, with hard steps between
          them rather than a gradient. */
-      uDark: { value: new THREE.Color(0x8d97a6) },
-      uMid: { value: new THREE.Color(0xc4ccd8) },
-      uWarm: { value: new THREE.Color(0xfff1dd) },
-      uLight: { value: new THREE.Color(0xf8fafd) }
+      /* sunset-lit: peach tops, mauve-grey undersides */
+      uDark: { value: new THREE.Color(0x857a80) },
+      uMid: { value: new THREE.Color(0xc7a596) },
+      uWarm: { value: new THREE.Color(0xffc48a) },
+      uLight: { value: new THREE.Color(0xf6dcc0) }
     }),
     vertexShader: [
       'attribute vec3 aOffset; attribute vec2 aSize; attribute float aLit; attribute float aSpd; attribute float aVar;',
@@ -259,7 +270,7 @@ function buildClouds() {
       '  col = mix(col, uLight, pow(a, 2.2) * 0.26 * cel2);',
       '  float rim = pow(clamp(1.0 - abs(vLit - 0.68) * 1.5, 0.0, 1.0), 3.0) * (1.0 - a);',
       '  col = mix(col, uWarm, rim * 0.42 * cel2);',
-      '  col = applyFog(col, vDist*0.38);',
+      '  col = applyFog(col, vDist*0.022);',
       '  gl_FragColor = vec4(col, 1.0);',
       '}'
     ].join('\n')
