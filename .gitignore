@@ -6,3 +6,6 @@ node_modules/
 .backup/
 .gstack/
 dist/
+
+# explainer films (see .claude/skills/explainer): rendered output, not source
+explainers/*/out/
